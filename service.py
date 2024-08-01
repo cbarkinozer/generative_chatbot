@@ -22,7 +22,11 @@ import torch
 USER_STORE = {}
 
 
-async def upload_documents(user: User, files: list[UploadFile]) -> tuple[str, int]:
+
+async def upload_documents(user: User, files: list[UploadFile], password:str) -> tuple[str, int]:
+    ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
+    if password != ADMIN_PASSWORD:
+        return "Only ADMIN can insert files.", 400
     text = await _extract_text_from_document(files)
     chunks = await _chunk_text(text)
     await _create_embeddings_and_save(user, chunks)

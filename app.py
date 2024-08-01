@@ -22,9 +22,9 @@ async def check_health():
     return JSONResponse(content={"success": "true"})
 
 @app.post("/document-uploader")
-async def document_uploader(username: str = Form(...), files: list[UploadFile] = File(...)):
+async def document_uploader(username: str = Form(...), files: list[UploadFile] = File(...), password: str = Form(...)):
     user = User(username=username)
-    response, status_code = await upload_documents(user, files)
+    response, status_code = await upload_documents(user, files, password)
     if status_code == 200:
         return {response}
     else:
