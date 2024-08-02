@@ -15,12 +15,29 @@ from datetime import datetime
 import io
 from dotenv import load_dotenv
 import threading
-from langdetect import detect
 from sentence_transformers import SentenceTransformer
 import torch
 
 USER_STORE = {}
 
+functions = {
+    "I want to book. Can you book me?": "BOOK",
+    "I have a question. Can you answer my question?": "QUESTION"
+}
+
+models = {}
+class BackgroundTasks(threading.Thread):
+    def run(self):
+        try:
+            model = 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'
+            encoder = SentenceTransformer(model, cache_folder='./encoder')
+            models["model"] = model
+            models["encoder"] = encoder
+        except Exception as e:
+            print(f"Error loading model: {e}")
+
+thread = BackgroundTasks()
+thread.start()
 
 
 async def upload_documents(user: User, files: list[UploadFile], password:str) -> tuple[str, int]:
@@ -74,52 +91,16 @@ async def _create_embeddings_and_save(user: User, chunks: any) -> FAISS:
     return vector_store
 
 
-models = {}
-class BackgroundTasks(threading.Thread):
-    def run(self):
-        try:
-            model = 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'
-            encoder = SentenceTransformer(model, cache_folder='./encoder')
-            models["model"] = model
-            models["encoder"] = encoder
-        except Exception as e:
-            print(f"Error loading model: {e}")
-
-thread = BackgroundTasks()
-thread.start()
-
-functions = {
-    "weather": {
-        "en_description":"How's the weather? Will it rain? Will it be cold? Weather. Weather information. Moisture. The soil dried up.",
-        "tr_description":"Hava nasıl? Yağacak mı? Soğuk mu olacak? Hava durumu. Hava durumu bilgileri. Nem. Toprak kurudu."
-    },
-    "sickness":{
-        "en_description":"Bug. It was infested. My plants are not growing. My plants turned yellow. My plants are dying. It does not produce crops. I can't get a crop.",
-        "tr_description":"Böcek. Böceklendi. Kurudu. Çürüdü. Sarardı. Büyümüyor. Mahsul alamadım. Bitkilerim ölüyor. Mahsül vermiyor. Mahsül alamıyorum."
-    },
-    "rag": {
-        "en_description":"Aquaponics. Hydroponics. Soilless agriculture. Aquaculture. Vertical farming.",
-        "tr_description":"Akuaponik. Hidroponik. Topraksız tarım. Akuakültür. Dikey tarım."
-    }
-}
-
-
 async def ask_question(user: User, question: str, api_key: str) -> tuple[str, int]: 
     
     user = await _get_saved_user(user)
 
     encoder = models["encoder"]
     question_embedding = encoder.encode(question)
-    request_language = detect(question)
-
-    if request_language == "tr":
-        description = "tr_description"
-    else:
-        description = "en_description"
     
     similarities = {}
-    for function, data in functions.items():
-        description_embedding = encoder.encode(data[description])
+    for function, answer in functions.items():
+        description_embedding = encoder.encode(answer)
         cosine_sim = torch.nn.CosineSimilarity(dim=0, eps=1e-6)
         request_embedding_tensor = torch.tensor(question_embedding)
         description_embedding_tensor = torch.tensor(description_embedding)
@@ -130,28 +111,59 @@ async def ask_question(user: User, question: str, api_key: str) -> tuple[str, in
     max_similarity_function = max(similarities, key=similarities.get)
 
     if max_similarity < 0.2:
-        if request_language=="tr":
-            return "İsteğinizi anlayamadım. İsteğinizi farklı bir şekilde ifade etmeyi deneyebilir misiniz?", 400
-        else:
-            return "I couldn't understand your request. Can you try expressing your request in a different way?", 400
+        return "I could not understand what you really meant by that. Is it possible for you to give more details ?", 400
+    elif max_similarity_function == "BOOK":
+        final_answer, memory, system_message, http_code = await _book(user, api_key)
+    else:
+        final_answer, memory, system_message, http_code = await _rag(user, api_key)
 
     print(f"[DEBUG] Selected Function: {max_similarity_function}")
-
-    if max_similarity_function == "weather":
-        answer = await _weather()
-    elif max_similarity_function == "sickness":
-        answer = await _sickness()
-    elif max_similarity_function == "rag":
-        answer = await _rag(user, question, api_key)
-    else:
-        return "Routed Function Name Exception", 500
     
+    user.memory.save(question=question, answer=final_answer)
+    await _log(user=user, memory=memory, question=question, system_message=system_message, selected_function= max_similarity_function, answer= answer, final_answer = final_answer)
+
+    return final_answer, http_code
+
+async def _book(user: User, api_key: str):
+    # ask llm to create a json of booking values from the given query
+    # fill the values and return is booking valid or not
+    # if booking is not valid ask llm to check if is there missing values if true return can you enter this value too? if no missing values llm fixes
+    return ""
+
+async def _get_saved_user(user: User) -> User:
+    if user.username in USER_STORE:
+        return USER_STORE[user.username]
+    else:
+        USER_STORE[user.username] = user
+        return user
+
+
+async def _rag(user: User, question: str, api_key: str):
+    vector_store = await _get_vector_file(user.username)
+    if vector_store is None:
+        return "Document not found.", None, None, 400
+    
+    os.environ["GOOGLE_API_KEY"] = api_key
+    
+    llm = await _get_llm(model_name=user.llm)
+    docs = vector_store.similarity_search(question)
+    retrieved_chunks = docs[0].page_content + docs[1].page_content + docs[2].page_content
+    system_message="Figure out the answer of the question by the given information pieces. ALWAYS answer with the language of the question."
+    prompt = system_message + "Question: " + question + " Context: " + retrieved_chunks
+    try:
+        response = llm.invoke(prompt)
+    except Exception:
+        return "Wrong API key.", None, None, 400
+    answer = response.content + "  **<Most Related Chunk>**  " + retrieved_chunks
+    print(f"[DEBUG] RAG Results: {answer}")
+
     system_message = """
     Sen tarımla alakalı insanlara yardımcı olan bir sohbet asistanısın.
     Senin görevin kullanıcının sana sorduğu sorulara sana verilen bilgileri kullanarak cevap vermek.
     Cevaplarının tonu dostane ve nötrdür.
     Cevabının en az birkaç cümle olmalıdır.
     Sana verilen bilgilerin dışında bilgiler kullanma.
+    
     <Örnek 1>:
     <Human>:
     <Soru>:
@@ -188,10 +200,9 @@ async def ask_question(user: User, question: str, api_key: str) -> tuple[str, in
     <Hafıza>:
 
     <AI>:
-    Maalesef, elimdeki bilgilerde bu sorunuzun cevabı bulunmuyor.
-    İsterseniz sorunuzu farklı bir şekilde dile getirin belki o şekilde istediğiniz bilgiyle alakalı kısmı sizin için bulabilirim.
 
-    Şimdi sıra sende:
+
+    Now it's your turn:
     """
     memory = user.memory.get_memory()
 
@@ -200,54 +211,12 @@ async def ask_question(user: User, question: str, api_key: str) -> tuple[str, in
     print("[DEBUG] Memory: ",memory)
     final_answer = llm.invoke(prompt)
     final_answer = final_answer.content
-    user.memory.save(question=question, answer=final_answer)
-    await _log(user=user, memory=memory, question=question, system_message=system_message, selected_function= max_similarity_function, answer= answer, final_answer = final_answer)
 
-    return final_answer, 200
-
-async def _get_saved_user(user: User) -> User:
-    if user.username in USER_STORE:
-        return USER_STORE[user.username]
-    else:
-        USER_STORE[user.username] = user
-        return user
-
-
-async def _weather() -> str:
-    return "Hava durumu parçalı bulutlu 30°C, Yağış: 0%, Nem: 28%, Rüzgar: 18 km/s"
-
-
-async def _sickness() -> str:
-    return "Maalesef hastalıklar konusunda yardımcı olamıyoruz. Lütfen bir uzmana danışın."
-
-
-async def _rag(user: User, question: str, api_key: str) -> tuple[str, int]:
-    vector_store = await _get_vector_file(user.username)
-    if vector_store is None:
-        return "Document not found.", 400
-    
-    if api_key is not None:
-        os.environ["GOOGLE_API_KEY"] = api_key
-    else:
-        is_loaded = load_dotenv()
-        if is_loaded == False:
-            return "API key not found.", 400
-    
-    llm = await _get_llm(model_name=user.llm)
-    docs = vector_store.similarity_search(question)
-    retrieved_chunks = docs[0].page_content + docs[1].page_content + docs[2].page_content
-    system_message="Figure out the answer of the question by the given information pieces. ALWAYS answer with the language of the question."
-    prompt = system_message + "Question: " + question + " Context: " + retrieved_chunks
-    try:
-        response = llm.invoke(prompt)
-    except Exception:
-        return "Wrong API key.", 400
-    answer = response.content + "  **<Most Related Chunk>**  " + retrieved_chunks
-    print(f"[DEBUG] RAG Results: {answer}")
-    return answer, 200
+    return final_answer, memory, system_message, 200
 
 
 async def _get_llm(model_name:str):
+    load_dotenv()
     if model_name == "openai":
         OPENAI_KEY = os.getenv("OPENAI_KEY")
         llm = OpenAI(api_key=OPENAI_KEY, model="gpt-3.5-turbo-instruct")
