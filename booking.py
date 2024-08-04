@@ -2,7 +2,7 @@ import re
 import datetime
 
 class Booking:
-    def __init__(self, full_name, phone_number, email, start_date, end_date, guest_count, room_type, number_of_rooms, payment_method, include_breakfast, extra_details=None):
+    def __init__(self, full_name:str, phone_number:str, email:str, start_date:str, end_date:str, guest_count:int, room_type:str, number_of_rooms:int, payment_method:str, include_breakfast:bool, extra_details:str=None):
         self.full_name = full_name
         self.phone_number = phone_number
         self.email = email
@@ -26,12 +26,22 @@ class Booking:
             f"Room Type: {self.room_type}\n"
             f"Number of Rooms: {self.number_of_rooms}\n"
             f"Payment Method: {self.payment_method}\n"
-            f"Include Breakfast: {'Yes' if self.include_breakfast else 'No'}\n"
+            f"Include Breakfast: {self.include_breakfast}\n"
             f"Extra Details: {self.extra_details}"
         )
         return details
 
-    def is_valid_booking(self):
+    def is_valid(self):
+        
+        none_fields = []
+        for field_name, value in self.__dict__.items():
+            if value is None:
+                none_fields.append(field_name)
+        
+        if none_fields:
+            message = f"The following fields are could not found: {', '.join(none_fields)}"
+            return False, message
+        
         # Date checks
         try:
             start_date = datetime.strptime(self.start_date, "%Y-%m-%d")

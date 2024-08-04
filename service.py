@@ -17,12 +17,14 @@ from dotenv import load_dotenv
 import threading
 from sentence_transformers import SentenceTransformer
 import torch
+import json
+from booking import Booking
 
 USER_STORE = {}
 
 functions = {
-    "I want to book. Can you book me?": "BOOK",
-    "I have a question. Can you answer my question?": "QUESTION"
+    "I want to book. Can you book me? I want to do reservation. Can you get my reservation?": "BOOK",
+    "I have a question. Can you answer my question? I want to ask. Ask about. My question is.": "QUESTION"
 }
 
 models = {}
@@ -91,7 +93,7 @@ async def _create_embeddings_and_save(user: User, chunks: any) -> FAISS:
     return vector_store
 
 
-async def ask_question(user: User, question: str, api_key: str) -> tuple[str, int]: 
+async def ask_question(user: User, question: str) -> tuple[str, int]: 
     
     user = await _get_saved_user(user)
 
@@ -113,9 +115,9 @@ async def ask_question(user: User, question: str, api_key: str) -> tuple[str, in
     if max_similarity < 0.2:
         return "I could not understand what you really meant by that. Is it possible for you to give more details ?", 400
     elif max_similarity_function == "BOOK":
-        final_answer, memory, system_message, http_code = await _book(user, api_key)
+        final_answer, memory, system_message, http_code = await _book(user, question)
     else:
-        final_answer, memory, system_message, http_code = await _rag(user, api_key)
+        final_answer, memory, system_message, http_code = await _rag(user, question)
 
     print(f"[DEBUG] Selected Function: {max_similarity_function}")
     
@@ -124,11 +126,133 @@ async def ask_question(user: User, question: str, api_key: str) -> tuple[str, in
 
     return final_answer, http_code
 
-async def _book(user: User, api_key: str):
-    # ask llm to create a json of booking values from the given query
-    # fill the values and return is booking valid or not
-    # if booking is not valid ask llm to check if is there missing values if true return can you enter this value too? if no missing values llm fixes
-    return ""
+async def _book(user: User, question: str):
+
+    system_message = """
+    You are responsible for getting a reservation information and creating a json from it.
+    Do not give any other response than JSON.
+    Detect the required json fields and put them in the right place.
+    
+    You need to find following values in the text and put in the JSON:
+    full_name: The full name of the customer,
+    phone_number: The phone number of the customer,
+    e_mail: The e-mail of the customer,
+    start_date: The arrival date of the customer,
+    end_date: The leaving date of the customer,
+    guest_count: The customer count,
+    room_type: What type of room they will stay,
+    rumber_of_rooms: How many rooms they want,
+    payment_method: How they will pay,
+    include_breakfast: Do they want to include breakfast as well or not,
+    extra_details: (Optional) other informations
+
+    Do NOT forget:
+    Dates must be in YYYY-MM-DD format.
+    End date must be after start date.
+    Guest count must be at least 1.
+    Number of rooms must be at least 1.
+    Phone number must be between 10 and 15 digits.
+    Include breakfast must be a boolean.
+
+    <Example>
+    <Human>:
+    Hi, I am Barkın Özer. You can call me from 5365363636 or mail me at c.barkinozer@gmail.com, We plan to be there at 15 August 2024 between 00.00 pm to 02.00 pm and leave at the 24 th.
+    Me and my girlfriend will stay on an economy room. I am planning to pay with visa card. We want breakfasts as well. Please include that.
+    Also can you add spa to our gym plan as well? Thanks.
+
+    <AI>:
+    fields = {
+        "full_name": "Barkın Özer",
+        "phone_number": "5365363636",
+        "email": "c.barkinozer@gmail.com",
+        "start_date": "2024-08-15",
+        "end_date": "2024-08-24",
+        "guest_count": 2,
+        "room_type": "Economy Room",
+        "number_of_rooms": 1,
+        "payment_method": "credit card",
+        "include_breakfast": True,
+        "extra_detail": "Visa card will be used as credit card. Spa will be added to the gym plan. Planning to arrive between 00.00 pm to 02.00 pm."
+    }
+
+    Now it's your turn:
+    """
+    memory = user.memory.get_memory()
+    prompt = f" System Message: {system_message} <Question>: {question} <Memory>: {memory}"
+    print("[DEBUG] Memory: ", memory)
+    
+    json_string = _ask_llm(user=user, prompt=prompt)
+    
+    data = json.loads(json_string)
+    
+    full_name = data['full_name']
+    phone_number = data['phone_number']
+    email = data['email']
+    start_date = data['start_date']
+    end_date = data['end_date']
+    guest_count = data['guest_count']
+    room_type = data['room_type']
+    number_of_rooms = data['number_of_rooms']
+    payment_method = data['payment_method']
+    include_breakfast = data['include_breakfast']
+    extra_details = data['extra_details']
+
+    is_booking_valid = False
+
+    booking = Booking(full_name=full_name, phone_number=phone_number, email=email, start_date=start_date, end_date=end_date, guest_count=guest_count, room_type=room_type, number_of_rooms=number_of_rooms, payment_method=payment_method, include_breakfast=include_breakfast, extra_details=extra_details)
+    is_booking_valid, validation_message = booking.is_valid()
+
+    if not is_booking_valid:
+        system_message = """
+        You are a json fixer.
+        Your goal is to fix the values in the json accordding to the validation message you will receive.
+
+        <Example>
+        <Question>:
+        Hi, I am Barkın Özer. You can call me from 5365363636 or mail me at c.barkinozer@gmail.com, We plan to be there at 15 August 2024 between 00.00 pm to 02.00 pm and leave at the 22 th.
+        Me and my girlfriend will stay on an economy room. I am planning to pay with visa card. We want breakfasts as well. Please include that.
+        Also can you add spa to our gym plan as well? Thanks.
+        <JSON>:
+        fields = {
+            "full_name": "Barkın Özer",
+            "phone_number": "5365363636",
+            "email": "c.barkinozer@gmail.com",
+            "start_date": "15 August 2022",
+            "end_date": "22th",
+            "guest_count": 2,
+            "room_type": "Economy Room",
+            "number_of_rooms": 0,
+            "payment_method": "visa card",
+            "include_breakfast": "Yes",
+        }
+        <Validation Message>:
+        Dates must be in YYYY-MM-DD format.
+
+        <AI>:
+        fields = {
+            "full_name": "Barkın Özer",
+            "phone_number": "5365363636",
+            "email": "c.barkinozer@gmail.com",
+            "start_date": "2024-08-15",
+            "end_date": "2024-08-22",
+            "guest_count": 2,
+            "room_type": "Economy Room",
+            "number_of_rooms": 1,
+            "payment_method": "credit card",
+            "include_breakfast": True,
+            "extra_detail": "Visa card will be used as credit card. Spa will be added to the gym plan. Planning to arrive between 00.00 pm to 02.00 pm."
+        }
+        
+        Now, it's your turn:
+        """
+        prompt = f" System Message: {system_message}\n <Question>: {question}\n <JSON>: {json_string}\n <Validation Message>: {validation_message}\n"
+        json_string = _ask_llm(user=user, prompt=prompt)
+        booking = Booking(full_name=full_name, phone_number=phone_number, email=email, start_date=start_date, end_date=end_date, guest_count=guest_count, room_type=room_type, number_of_rooms=number_of_rooms, payment_method=payment_method, include_breakfast=include_breakfast, extra_details=extra_details)
+        is_booking_valid, validation_message = booking.is_valid()
+
+    if not is_booking_valid:
+        return f"Booking validation is not met: f{validation_message}", 400
+    return "", 200
 
 async def _get_saved_user(user: User) -> User:
     if user.username in USER_STORE:
@@ -146,7 +270,8 @@ async def _rag(user: User, question: str, api_key: str):
     os.environ["GOOGLE_API_KEY"] = api_key
     
     llm = await _get_llm(model_name=user.llm)
-    docs = vector_store.similarity_search(question)
+    memory = user.memory.get_memory()
+    docs = vector_store.similarity_search(question+memory)
     retrieved_chunks = docs[0].page_content + docs[1].page_content + docs[2].page_content
     system_message="Figure out the answer of the question by the given information pieces. ALWAYS answer with the language of the question."
     prompt = system_message + "Question: " + question + " Context: " + retrieved_chunks
@@ -158,61 +283,53 @@ async def _rag(user: User, question: str, api_key: str):
     print(f"[DEBUG] RAG Results: {answer}")
 
     system_message = """
-    Sen tarımla alakalı insanlara yardımcı olan bir sohbet asistanısın.
-    Senin görevin kullanıcının sana sorduğu sorulara sana verilen bilgileri kullanarak cevap vermek.
-    Cevaplarının tonu dostane ve nötrdür.
-    Cevabının en az birkaç cümle olmalıdır.
-    Sana verilen bilgilerin dışında bilgiler kullanma.
-    
-    <Örnek 1>:
+    You are a reservation assistant who books and reserves places.
+    Your task is to answer the questions asked by the user using the information provided to you.
+    The tone of your answers is friendly and neutral.
+    Your response should be at least a few sentences long.
+    NEVER use information outside of what is provided to you.
+
+    <Example 1>:
     <Human>:
-    <Soru>:
-    Mahsül alamıyorum, ekinlerim ölüyor. Sorun ne olabilir?
-    <Bilgi>:
-    Maalesef hastalıklar konusunda yardımcı olamıyoruz. Lütfen bir uzmana danışın.
-    <Hafıza>:
+    <Question>:
+    I need a gym? Is it extra?
+    <Information>:
+    Yes, our fitness center is open 24/7 and is available for all guests.
+    <Memory>:
     <AI>:
-    Bu durumun birçok farklı nedeni olabilir.
-    Maalesef hastalıklar konusunda size yardımcı olamıyorum.
-    Bu konuda bir uzmana danışmanızı öneririm.
-    Uzman, ekinlerinizin durumunu yerinde değerlendirerek en doğru teşhisi koyup size uygun çözümler sunacaktır.
+    Yes, our fitness center is open 24/7 and is available for all guests at no extra charge.
+    Feel free to use it whenever you like during your stay.
+    If you have any other questions or need further assistance, don't hesitate to ask!
 
-    <Örnek 2>:
+    <Example 2>:
     <Human>:
-    <Soru>:
-    Yağmur ne zaman yağacak tarlam çok kurudu?
-    <Bilgi>:
-    Hava durumu parçalı bulutlu 30°C, Yağış: 0%, Nem: 28%, Rüzgar: 18 km/s
-    <Hafıza>:
+    <Question>:
+    How many of them do you have?
+    <Information>:
+    Yes, we have an indoor swimming pool available for all guests.
+    <Memory>:
+    Do you have swimming pools?
+    Yes, we have an indoor swimming pool available for all guests at no extra charge.
+    Feel free to use it whenever you like during your stay.
+    If you have any other questions or need further assistance, don't hesitate to ask!
     <AI>:
-    Maalesef, mevcut hava durumu bilgilerine göre yağmur beklenmiyor.
-    Hava parçalı bulutlu, sıcaklık 30°C, nem oranı %28 ve rüzgar hızı 18 km/s.
-    Bu koşullarda yağış olasılığı %0 görünüyor.
-    Tarlanızı sulamak için alternatif yöntemler düşünmeniz gerekebilir.
-    Yakın zamanda bir yağış tahmini almak için hava durumu raporlarını düzenli olarak kontrol etmekte fayda var.
-
-    <Örnek 3>:
-    <Human>:
-    <Soru>:
-    Nasıl topraksız tarım yapabilirim?
-    <Bilgi>:
-    Metinde böyle bir bilgi bulunmamaktadır.
-    <Hafıza>:
-
-    <AI>:
-
+    We have a single indoor swimming pool.
+    Do you have any other questions?
 
     Now it's your turn:
     """
-    memory = user.memory.get_memory()
-
-    llm = await _get_llm(model_name=user.llm)
-    prompt = f" Sistem Mesajı: {system_message} <Soru>: {question} <Bilgi>: {answer} <Hafıza>: {memory}"
+    prompt = f" System Message: {system_message} <Question>: {question} <Information>: {answer} <Memory>: {memory}"
     print("[DEBUG] Memory: ",memory)
+
+    answer = _ask_llm(user=user, prompt=prompt)
+
+    return answer, memory, system_message, 200
+
+async def _ask_llm(user:User, prompt:str) ->str:
+    llm = await _get_llm(model_name=user.llm)
     final_answer = llm.invoke(prompt)
     final_answer = final_answer.content
-
-    return final_answer, memory, system_message, 200
+    return final_answer
 
 
 async def _get_llm(model_name:str):

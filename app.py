@@ -31,9 +31,9 @@ async def document_uploader(username: str = Form(...), files: list[UploadFile] =
         raise HTTPException(status_code=status_code, detail=response)
 
 @app.post("/question-answerer")
-async def question_answerer(username: str = Form(...), question: str = Form(...), api_key = File(None)):
+async def question_answerer(username: str = Form(...), question: str = Form(...)):
     user = User(username=username)
-    response, status_code = await ask_question(user, question, api_key)
+    response, status_code = await ask_question(user, question)
     if status_code == 200:
         return {response}
     else:
