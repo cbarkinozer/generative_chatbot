@@ -1,8 +1,8 @@
 import re
-import datetime
+from datetime import datetime
 
 class Booking:
-    def __init__(self, full_name:str, phone_number:str, email:str, start_date:str, end_date:str, guest_count:int, room_type:str, number_of_rooms:int, payment_method:str, include_breakfast:bool, extra_details:str=None):
+    def __init__(self, full_name:str, phone_number:str, email:str, start_date:str, end_date:str, guest_count:int, room_type:str, number_of_rooms:int, payment_method:str, include_breakfast:bool, note:str=None):
         self.full_name = full_name
         self.phone_number = phone_number
         self.email = email
@@ -13,7 +13,7 @@ class Booking:
         self.number_of_rooms = number_of_rooms
         self.payment_method = payment_method
         self.include_breakfast = include_breakfast
-        self.extra_details = extra_details if extra_details else {}
+        self.note = note if note else {}
 
     def display_booking_details(self):
         details = (
@@ -27,7 +27,7 @@ class Booking:
             f"Number of Rooms: {self.number_of_rooms}\n"
             f"Payment Method: {self.payment_method}\n"
             f"Include Breakfast: {self.include_breakfast}\n"
-            f"Extra Details: {self.extra_details}"
+            f"Extra Details: {self.note}"
         )
         return details
 
@@ -47,7 +47,7 @@ class Booking:
             start_date = datetime.strptime(self.start_date, "%Y-%m-%d")
             end_date = datetime.strptime(self.end_date, "%Y-%m-%d")
         except ValueError:
-            return False, "Dates must be in YYYY-MM-DD format."
+            return False, "Dates must be in YYYY-MM-DD format. Are you sure you entered the start and end date?"
 
         if start_date >= end_date:
             return False, "End date must be after start date."
@@ -66,7 +66,7 @@ class Booking:
 
         # Email format check
         if not re.match(r"[^@]+@[^@]+\.[^@]+", self.email):
-            return False, "Invalid email format."
+            return False, "Invalid email format. Are you sure you entered email correctly?"
 
         # Include breakfast check (should be a boolean)
         if not isinstance(self.include_breakfast, bool):

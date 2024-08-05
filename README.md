@@ -5,7 +5,9 @@ UI is gradio because it is easy to integrate in a website.
 Single page dummy fasthtml website will created and gradio project will be integrated.
 
 # Simple booking dialogues 
-Below are the simple booking dialogues that are gathered from internet to test and develop the application better.
+Simple booking dialogues that are used can be found in document.txt.  
+LLMs are utilized to generate example question answer pairs to do Retrieval Augmented Generation.  
+Application is tested with a real user, the questions the user asked is added to the RAG document.  
 
 # Architecture
 * There are 2 pages admin uploads file with his password (password is set at .env file and can be change from the admin-ui after setting it correctly).

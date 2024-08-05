@@ -1,3 +1,6 @@
+__pycache__/*
 chatbot/*
 .env
-./encoder
+encoder/*
+*.pkl
+log.txt

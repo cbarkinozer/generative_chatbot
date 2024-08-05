@@ -14,32 +14,10 @@ import pickle
 from datetime import datetime
 import io
 from dotenv import load_dotenv
-import threading
-from sentence_transformers import SentenceTransformer
-import torch
 import json
 from booking import Booking
 
 USER_STORE = {}
-
-functions = {
-    "I want to book. Can you book me? I want to do reservation. Can you get my reservation?": "BOOK",
-    "I have a question. Can you answer my question? I want to ask. Ask about. My question is.": "QUESTION"
-}
-
-models = {}
-class BackgroundTasks(threading.Thread):
-    def run(self):
-        try:
-            model = 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'
-            encoder = SentenceTransformer(model, cache_folder='./encoder')
-            models["model"] = model
-            models["encoder"] = encoder
-        except Exception as e:
-            print(f"Error loading model: {e}")
-
-thread = BackgroundTasks()
-thread.start()
 
 
 async def upload_documents(user: User, files: list[UploadFile], password:str) -> tuple[str, int]:
@@ -76,8 +54,8 @@ async def _chunk_text(text: str) -> list[str]:
     chunks = None
     text_splitter = CharacterTextSplitter(
         separator="\n",
-        chunk_size=512,
-        chunk_overlap=10,
+        chunk_size=1000,
+        chunk_overlap=20,
         length_function=len
     )
     chunks = text_splitter.split_text(text)
@@ -86,7 +64,7 @@ async def _chunk_text(text: str) -> list[str]:
 
 async def _create_embeddings_and_save(user: User, chunks: any) -> FAISS:
     embeddings = HuggingFaceEmbeddings(model_name=user.embedder)
-    pkl_name = os.path.join(user.username + ".pkl")
+    pkl_name = os.path.join("document.pkl")
     vector_store = FAISS.from_texts(chunks, embeddings, metadatas=[{"source": f"{pkl_name}:{i}"} for i in range(len(chunks))])
     with open(pkl_name, "wb") as f:
         pickle.dump(vector_store, f)
@@ -96,33 +74,52 @@ async def _create_embeddings_and_save(user: User, chunks: any) -> FAISS:
 async def ask_question(user: User, question: str) -> tuple[str, int]: 
     
     user = await _get_saved_user(user)
+    system_message = """
+    Your goal is deciding (classifying) if the customer in the inquiry is booking or not yet decided and just asking questions.
+    If inquiry is a booking request, say ONLY "booking".
+    Booking/reservation requests include information about the customer and their vacation plan.
+    If customer is not yet decided to book, ONLY say "question".
 
-    encoder = models["encoder"]
-    question_embedding = encoder.encode(question)
-    
-    similarities = {}
-    for function, answer in functions.items():
-        description_embedding = encoder.encode(answer)
-        cosine_sim = torch.nn.CosineSimilarity(dim=0, eps=1e-6)
-        request_embedding_tensor = torch.tensor(question_embedding)
-        description_embedding_tensor = torch.tensor(description_embedding)
-        similarity = cosine_sim(request_embedding_tensor, description_embedding_tensor)
-        similarities[function] = similarity.item()
-    
-    max_similarity = max(similarities.values())
-    max_similarity_function = max(similarities, key=similarities.get)
+    <Example 1>
+    <Human>:
+    Hello,  My name is Arda Yılmaz.
+    You can reach me at 123-456-7890 or via email at arda.yilmaz@example.com.
+    We plan to arrive on September 10, 2024, between 1:00 PM and 3:00 PM, and depart on September 20, 2024.
+    My wife and I will be staying in an economy room.
+    I intend to pay with a MasterCard.
+    We would also like to include breakfasts with our stay. 
+    Additionally, could you please add access to the spa to our gym plan?
+    Thanks.
+    <AI>:
+    booking
 
-    if max_similarity < 0.2:
-        return "I could not understand what you really meant by that. Is it possible for you to give more details ?", 400
-    elif max_similarity_function == "BOOK":
+    <Example 2>
+    <Human>:
+    Hey I am Barkın Özer.
+    I am planning a vacation in Antalya in 5 August 2024.
+    And I wanted learn first that can I book a conference room?
+    Because if we will book your hotel I need a place to do meetings.
+    Thanks.
+
+    <AI>:
+    question
+    
+    Now it's your turn:
+    """
+    prompt = f" System Message: {system_message} <Inquiry>: {question}"
+    selected_function = await _ask_llm(user=user,prompt=prompt)
+    
+    if "book" in selected_function.lower():
         final_answer, memory, system_message, http_code = await _book(user, question)
-    else:
+    if "question" in selected_function.lower():
         final_answer, memory, system_message, http_code = await _rag(user, question)
+    else:
+        "Can you explain your request in a different way with more details? I could not understand.", memory, system_message, 400
 
-    print(f"[DEBUG] Selected Function: {max_similarity_function}")
+    print(f"[DEBUG] Selected Function: {selected_function}")
     
     user.memory.save(question=question, answer=final_answer)
-    await _log(user=user, memory=memory, question=question, system_message=system_message, selected_function= max_similarity_function, answer= answer, final_answer = final_answer)
+    await _log(user=user, memory=memory, question=question, selected_function= selected_function, final_answer = final_answer)
 
     return final_answer, http_code
 
@@ -144,7 +141,7 @@ async def _book(user: User, question: str):
     rumber_of_rooms: How many rooms they want,
     payment_method: How they will pay,
     include_breakfast: Do they want to include breakfast as well or not,
-    extra_details: (Optional) other informations
+    note: (Optional) other informations
 
     Do NOT forget:
     Dates must be in YYYY-MM-DD format.
@@ -161,7 +158,7 @@ async def _book(user: User, question: str):
     Also can you add spa to our gym plan as well? Thanks.
 
     <AI>:
-    fields = {
+    {
         "full_name": "Barkın Özer",
         "phone_number": "5365363636",
         "email": "c.barkinozer@gmail.com",
@@ -171,8 +168,8 @@ async def _book(user: User, question: str):
         "room_type": "Economy Room",
         "number_of_rooms": 1,
         "payment_method": "credit card",
-        "include_breakfast": True,
-        "extra_detail": "Visa card will be used as credit card. Spa will be added to the gym plan. Planning to arrive between 00.00 pm to 02.00 pm."
+        "include_breakfast": true,
+        "note": "Visa card will be used as credit card. Spa will be added to the gym plan. Planning to arrive between 00.00 pm to 02.00 pm."
     }
 
     Now it's your turn:
@@ -181,25 +178,34 @@ async def _book(user: User, question: str):
     prompt = f" System Message: {system_message} <Question>: {question} <Memory>: {memory}"
     print("[DEBUG] Memory: ", memory)
     
-    json_string = _ask_llm(user=user, prompt=prompt)
+    json_string = await _ask_llm(user=user, prompt=prompt)
     
-    data = json.loads(json_string)
+    try:
+        data = json.loads(json_string)
+    except Exception as e:
+        # Booking request with no info is given
+        print(f"An exception has occured: {e}\n")
+        print(json_string)
+        return "For me to book you, please tell me your full name, phone number, email, booking start date, booking end date, guest count, room type, number of rooms, payment method. Also do you want breakfast too?", memory, system_message, 200
+
+    print(data)
     
-    full_name = data['full_name']
-    phone_number = data['phone_number']
-    email = data['email']
-    start_date = data['start_date']
-    end_date = data['end_date']
-    guest_count = data['guest_count']
-    room_type = data['room_type']
-    number_of_rooms = data['number_of_rooms']
-    payment_method = data['payment_method']
-    include_breakfast = data['include_breakfast']
-    extra_details = data['extra_details']
+    # Check for each key and assign if it exists
+    full_name = data['full_name'] if 'full_name' in data else None
+    phone_number = data['phone_number'] if 'phone_number' in data else None
+    email = data['email'] if 'email' in data else None
+    start_date = data['start_date'] if 'start_date' in data else None
+    end_date = data['end_date'] if 'end_date' in data else None
+    guest_count = data['guest_count'] if 'guest_count' in data else None
+    room_type = data['room_type'] if 'room_type' in data else None
+    number_of_rooms = data['number_of_rooms'] if 'number_of_rooms' in data else None
+    payment_method = data['payment_method'] if 'payment_method' in data else None
+    include_breakfast = data['include_breakfast'] if 'include_breakfast' in data else None
+    note = data['note'] if 'note' in data else None
 
     is_booking_valid = False
 
-    booking = Booking(full_name=full_name, phone_number=phone_number, email=email, start_date=start_date, end_date=end_date, guest_count=guest_count, room_type=room_type, number_of_rooms=number_of_rooms, payment_method=payment_method, include_breakfast=include_breakfast, extra_details=extra_details)
+    booking = Booking(full_name=full_name, phone_number=phone_number, email=email, start_date=start_date, end_date=end_date, guest_count=guest_count, room_type=room_type, number_of_rooms=number_of_rooms, payment_method=payment_method, include_breakfast=include_breakfast, note=note)
     is_booking_valid, validation_message = booking.is_valid()
 
     if not is_booking_valid:
@@ -209,14 +215,14 @@ async def _book(user: User, question: str):
 
         <Example>
         <Question>:
-        Hi, I am Barkın Özer. You can call me from 5365363636 or mail me at c.barkinozer@gmail.com, We plan to be there at 15 August 2024 between 00.00 pm to 02.00 pm and leave at the 22 th.
+        Hi, I am Barkın Özer. You can call me from 5365363636 or mail me at barkinozer@gmail.com, We plan to be there at 15 August 2024 between 00.00 pm to 02.00 pm and leave at the 22 th.
         Me and my girlfriend will stay on an economy room. I am planning to pay with visa card. We want breakfasts as well. Please include that.
         Also can you add spa to our gym plan as well? Thanks.
         <JSON>:
         fields = {
             "full_name": "Barkın Özer",
             "phone_number": "5365363636",
-            "email": "c.barkinozer@gmail.com",
+            "email": "barkinozer@gmail.com",
             "start_date": "15 August 2022",
             "end_date": "22th",
             "guest_count": 2,
@@ -232,27 +238,30 @@ async def _book(user: User, question: str):
         fields = {
             "full_name": "Barkın Özer",
             "phone_number": "5365363636",
-            "email": "c.barkinozer@gmail.com",
+            "email": "barkinozer@gmail.com",
             "start_date": "2024-08-15",
             "end_date": "2024-08-22",
             "guest_count": 2,
             "room_type": "Economy Room",
             "number_of_rooms": 1,
             "payment_method": "credit card",
-            "include_breakfast": True,
-            "extra_detail": "Visa card will be used as credit card. Spa will be added to the gym plan. Planning to arrive between 00.00 pm to 02.00 pm."
+            "include_breakfast": true,
+            "note": "Visa card will be used as credit card. Spa will be added to the gym plan. Planning to arrive between 00.00 pm to 02.00 pm."
         }
         
         Now, it's your turn:
         """
         prompt = f" System Message: {system_message}\n <Question>: {question}\n <JSON>: {json_string}\n <Validation Message>: {validation_message}\n"
-        json_string = _ask_llm(user=user, prompt=prompt)
-        booking = Booking(full_name=full_name, phone_number=phone_number, email=email, start_date=start_date, end_date=end_date, guest_count=guest_count, room_type=room_type, number_of_rooms=number_of_rooms, payment_method=payment_method, include_breakfast=include_breakfast, extra_details=extra_details)
+        user.set_llm(llm="gemini-pro")
+        json_string = await _ask_llm(user=user, prompt=prompt)
+        booking = Booking(full_name=full_name, phone_number=phone_number, email=email, start_date=start_date, end_date=end_date, guest_count=guest_count, room_type=room_type, number_of_rooms=number_of_rooms, payment_method=payment_method, include_breakfast=include_breakfast, note=note)
         is_booking_valid, validation_message = booking.is_valid()
 
     if not is_booking_valid:
-        return f"Booking validation is not met: f{validation_message}", 400
-    return "", 200
+        return f"Booking validation is not met: f{validation_message}", memory, system_message, 400
+    
+    user.set_booking(booking=booking)
+    return "Booking added successfully!", memory, system_message, 200
 
 async def _get_saved_user(user: User) -> User:
     if user.username in USER_STORE:
@@ -262,12 +271,10 @@ async def _get_saved_user(user: User) -> User:
         return user
 
 
-async def _rag(user: User, question: str, api_key: str):
-    vector_store = await _get_vector_file(user.username)
+async def _rag(user: User, question: str):
+    vector_store = await _get_vector_file()
     if vector_store is None:
         return "Document not found.", None, None, 400
-    
-    os.environ["GOOGLE_API_KEY"] = api_key
     
     llm = await _get_llm(model_name=user.llm)
     memory = user.memory.get_memory()
@@ -277,9 +284,9 @@ async def _rag(user: User, question: str, api_key: str):
     prompt = system_message + "Question: " + question + " Context: " + retrieved_chunks
     try:
         response = llm.invoke(prompt)
-    except Exception:
-        return "Wrong API key.", None, None, 400
-    answer = response.content + "  **<Most Related Chunk>**  " + retrieved_chunks
+    except Exception as e:
+        return f"LLM call error: {e}", None, None, 400
+    answer = response.content
     print(f"[DEBUG] RAG Results: {answer}")
 
     system_message = """
@@ -321,7 +328,7 @@ async def _rag(user: User, question: str, api_key: str):
     prompt = f" System Message: {system_message} <Question>: {question} <Information>: {answer} <Memory>: {memory}"
     print("[DEBUG] Memory: ",memory)
 
-    answer = _ask_llm(user=user, prompt=prompt)
+    answer = await _ask_llm(user=user, prompt=prompt)
 
     return answer, memory, system_message, 200
 
@@ -333,7 +340,8 @@ async def _ask_llm(user:User, prompt:str) ->str:
 
 
 async def _get_llm(model_name:str):
-    load_dotenv()
+    is_loaded = load_dotenv('.env')
+    print(f"[DEBUG] Is .env loaded: {is_loaded}")
     if model_name == "openai":
         OPENAI_KEY = os.getenv("OPENAI_KEY")
         llm = OpenAI(api_key=OPENAI_KEY, model="gpt-3.5-turbo-instruct")
@@ -345,27 +353,29 @@ async def _get_llm(model_name:str):
         llm = AzureOpenAI(azure_ad_token=AZURE_AD_TOKEN, azure_ad_token_provider=AZURE_AD_TOKEN_PROVIDER, azure_deployment=AZURE_DEPLOYMENT, azure_endpoint=AZURE_ENDPOINT, model="gpt-3.5-turbo-instruct")
     elif model_name == "llama3":
         GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-        os.environ["GROQ_API_KEY"] = GROQ_API_KEY
         llm = ChatGroq(api_key=GROQ_API_KEY, model_name="llama3-70b-8192")
+    elif model_name == "llama3-small":
+        GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+        llm = ChatGroq(api_key=GROQ_API_KEY, model_name="llama3-8b-8192")
     else:
         GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
         llm = ChatGoogleGenerativeAI(google_api_key=GOOGLE_API_KEY,model="gemini-pro")
     return llm
 
 
-async def _get_vector_file(username: str)-> any:
-    with open(username+".pkl", "rb") as f:
+async def _get_vector_file()-> any:
+    with open("document.pkl", "rb") as f:
         vector_store = pickle.load(f)
     return vector_store
 
 
-async def _log(user: User, memory:str, question: str, system_message: str, selected_function: str, answer: str, final_answer: str) -> None:
+async def _log(user: User, memory:str, question: str, selected_function: str, final_answer: str) -> None:
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     username = user.username
     llm = user.llm
     embedder = user.embedder
 
-    log_message = f"\n{timestamp}, Username: {username}, Memory: {memory}, Question: {question}, LLM: {llm}, Embedder: {embedder}, System Message: {system_message}, Selected Function: {selected_function}, Answer: {answer}, Final Answer: {final_answer}\n"
+    log_message = f"\n{timestamp}, Username: {username}, Memory: {memory}, Question: {question}, LLM: {llm}, Embedder: {embedder}, Selected Function: {selected_function}, Final Answer: {final_answer}\n"
     with open("log.txt", "a", encoding="utf-8") as file:
         file.write("------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------")
         file.write(log_message)

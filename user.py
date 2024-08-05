@@ -7,4 +7,10 @@ class User:
         self.llm = "llama3" #gemini-pro
         self.embedder = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
         self.memory = Memory()
-        self.booking = Booking()
+        self.booking = None
+    
+    def set_booking(self, booking:Booking):
+        self.booking = booking
+    
+    def set_llm(self, llm):
+        self.llm = llm
