@@ -186,9 +186,10 @@ async def _book(user: User, question: str):
         # Booking request with no info is given
         print(f"An exception has occured: {e}\n")
         print(json_string)
-        return "For me to book you, please tell me your full name, phone number, email, booking start date, booking end date, guest count, room type, number of rooms, payment method. Also do you want breakfast too?", memory, system_message, 200
+        return "For me to book you, please tell me your full name, phone number, email, booking start date, booking end date, guest count, room type, number of rooms, payment method. Also do you want breakfast too?", memory, 200
 
     print(data)
+    
     
     # Check for each key and assign if it exists
     full_name = data['full_name'] if 'full_name' in data else None
@@ -202,6 +203,27 @@ async def _book(user: User, question: str):
     payment_method = data['payment_method'] if 'payment_method' in data else None
     include_breakfast = data['include_breakfast'] if 'include_breakfast' in data else None
     note = data['note'] if 'note' in data else None
+
+    scrapped_data = {
+        "full_name":full_name,
+        "phone_number":phone_number,
+        "start_date":start_date,
+        "end_date":end_date,
+        "guest_count":guest_count,
+        "room_type":room_type,
+        "number_of_rooms":number_of_rooms,
+        "payment_method": payment_method,
+        "include_breakfast": include_breakfast,
+        "note": note
+    }
+
+    none_fields = []
+    for field_name, value in scrapped_data.items():
+        if value is None:
+            none_fields.append(field_name)
+        
+    if none_fields:
+        return f"Can you also tell me these information as well please: {', '.join(none_fields)}", None, 200
 
     is_booking_valid = False
 

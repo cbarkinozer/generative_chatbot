@@ -1,6 +1,7 @@
 bs4==0.0.2
 faiss-cpu==1.8.0.post1
 fastapi==0.111.0
+gradio==4.41.0
 langchain==0.2.6
 langchain-community==0.2.6
 langchain-google-genai==1.0.7
