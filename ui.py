@@ -66,7 +66,7 @@ class PDFChatBot:
                 # Handle cases where the response is not JSON
                 chat_history[-1][1] = f"Error: Couldn't decode JSON. {str(e)}"
         else:
-            error_message = f"Error: {response.status_code} - {response.text}"
+            error_message = response.text
             if chat_history:
                 chat_history[-1][1] = error_message
             else:
@@ -80,7 +80,7 @@ def create_demo():
         with gr.Row():
             chat_history = gr.Chatbot(
                 label='Hotel Chatbot',
-                value=[["*enters*", "Hi! 😊 You are welcome to ask me any questions about the hotel or to book.If you want to book, I will require at least the following information: Full name, phone number, email address, booking start and finish dates, guest count, room type, number of rooms, payment method, breakfast."]],
+                value=[["**enters**", "Hi! 😊 You are welcome to ask me any questions about the hotel or to book.\n If you want to book, I will require at least the following information:\n Full name, phone number, email address, booking start and finish dates, guest count, room type, number of rooms, payment method, breakfast."]],
                 elem_id='chatbot',
                 height=680
             )

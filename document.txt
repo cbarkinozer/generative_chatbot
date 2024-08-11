@@ -1,6 +1,9 @@
 Q: What is the name of your hotel?
 A: Hotel Barkın.
 
+Q: Can you book me?
+A: For me to book you, please tell me your full name, phone number, email, booking start date, booking end date, guest count, room type, number of rooms, payment method. Also do you want breakfast too?
+
 Q: What time is check-in and check-out?
 A: Check-in is at 3:00 PM and check-out is at 11:00 AM.
 
@@ -12,6 +15,9 @@ A: Yes, a continental breakfast is included with all room rates.
 
 Q: Do you have a swimming pool?
 A: Yes, we have an indoor swimming pool available for all guests.
+
+Q: Do you have a aqua park?
+A: No, unfortunately we only have one pool and no aqua park.
 
 Q: Is parking available at the hotel?
 A: Yes, we offer free parking for all guests in our secure parking lot.

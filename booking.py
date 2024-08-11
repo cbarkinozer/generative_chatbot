@@ -33,15 +33,6 @@ class Booking:
 
     def is_valid(self):
         
-        none_fields = []
-        for field_name, value in self.__dict__.items():
-            if value is None:
-                none_fields.append(field_name)
-        
-        if none_fields:
-            message = f"The following fields are could not found: {', '.join(none_fields)}"
-            return False, message
-        
         # Date checks
         try:
             start_date = datetime.strptime(self.start_date, "%Y-%m-%d")

@@ -219,11 +219,11 @@ async def _book(user: User, question: str):
 
     none_fields = []
     for field_name, value in scrapped_data.items():
-        if value is None:
+        if (value == "" or value is None) and value != "note":
             none_fields.append(field_name)
         
     if none_fields:
-        return f"Can you also tell me these information as well please: {', '.join(none_fields)}", None, 200
+        return f"You need to tell me these information as well please: {', '.join(none_fields)}", None, None, 200
 
     is_booking_valid = False
 
@@ -280,7 +280,7 @@ async def _book(user: User, question: str):
         is_booking_valid, validation_message = booking.is_valid()
 
     if not is_booking_valid:
-        return f"Booking validation is not met: f{validation_message}", memory, system_message, 400
+        return f"Booking validation is not met: {validation_message}", memory, system_message, 400
     
     user.set_booking(booking=booking)
     return "Booking added successfully!", memory, system_message, 200
@@ -317,6 +317,7 @@ async def _rag(user: User, question: str):
     The tone of your answers is friendly and neutral.
     Your response should be at least a few sentences long.
     NEVER use information outside of what is provided to you.
+    Answer ONLY in the language in which you were asked the question.
 
     <Example 1>:
     <Human>:
