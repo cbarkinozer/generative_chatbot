@@ -56,7 +56,7 @@ class PDFChatBot:
             try:
                 assistant_message = response.json()  # Ensure the API returns JSON
                 if isinstance(assistant_message, dict):  # Check if the response is a dictionary
-                    assistant_message = assistant_message.get('message', '')  # Adjust this according to your API response structure
+                    assistant_message = assistant_message.get('response', '')
 
                 if chat_history:
                     chat_history[-1][1] = assistant_message  # Update the assistant's response
@@ -80,7 +80,7 @@ def create_demo():
         with gr.Row():
             chat_history = gr.Chatbot(
                 label='Hotel Chatbot',
-                value=[["", "Hi! 😊 You are welcome to ask me any questions about the hotel or to book.If you want to book, I will require at least the following information: Full name, phone number, email address, booking start and finish dates, guest count, room type, number of rooms, payment method, breakfast."]],
+                value=[["*enters*", "Hi! 😊 You are welcome to ask me any questions about the hotel or to book.If you want to book, I will require at least the following information: Full name, phone number, email address, booking start and finish dates, guest count, room type, number of rooms, payment method, breakfast."]],
                 elem_id='chatbot',
                 height=680
             )
