@@ -2,6 +2,8 @@ import gradio as gr
 import requests
 import os
 from dotenv import load_dotenv
+import random
+import string
 
 load_dotenv('.env')
 API_URL = os.getenv("API_URL")
@@ -11,7 +13,6 @@ class PDFChatBot:
         self.username = "ADMIN"
 
     def render_file(self, files, password):
-        # Prepare the files for the request
         files_dict = {}
 
         # Check if files is a list or a single file
@@ -37,27 +38,52 @@ class PDFChatBot:
         else:
             return gr.update(visible=True, value=f"Error: {response.status_code} - {response.text}")
 
-
-
-
     def add_text(self, chat_history, text):
-        chat_history.append({"role": "user", "content": text})
+        # Ensure chat_history is a list of lists
+        if chat_history is None:
+            chat_history = []
+
+        chat_history.append([text, ""])  # user message, assistant response placeholder
         return chat_history
 
-    def generate_response(self, chat_history, text, uploaded_pdf):
-        response = requests.post(f"{API_URL}/question-answerer", data={"username": self.username, "question": text})
+    def generate_response(self, chat_history, text):
+        characters = string.ascii_letters + string.digits
+        username = ''.join(random.choice(characters) for _ in range(6))
+
+        response = requests.post(f"{API_URL}/question-answerer", data={"username": username, "question": text})
+
         if response.status_code == 200:
-            assistant_message = response.json()  # Adjust this based on actual response structure
-            chat_history.append({"role": "assistant", "content": assistant_message})
+            try:
+                assistant_message = response.json()  # Ensure the API returns JSON
+                if isinstance(assistant_message, dict):  # Check if the response is a dictionary
+                    assistant_message = assistant_message.get('message', '')  # Adjust this according to your API response structure
+
+                if chat_history:
+                    chat_history[-1][1] = assistant_message  # Update the assistant's response
+                else:
+                    chat_history.append(["", assistant_message])  # Add a new entry if `chat_history` was empty
+            except ValueError as e:
+                # Handle cases where the response is not JSON
+                chat_history[-1][1] = f"Error: Couldn't decode JSON. {str(e)}"
         else:
-            chat_history.append({"role": "assistant", "content": f"Error: {response.status_code} - {response.text}"})
-        return chat_history, ""
+            error_message = f"Error: {response.status_code} - {response.text}"
+            if chat_history:
+                chat_history[-1][1] = error_message
+            else:
+                chat_history.append(["", error_message])  # Handle empty `chat_history`
+
+        return chat_history, ""  # Returning an empty string to reset the text input
 
 # Gradio application setup
 def create_demo():
-    with gr.Blocks(title="Hotel Booking Chatbot", theme="Soft") as demo:
+    with gr.Blocks(title="Hotel Booking Chatbot") as demo:
         with gr.Row():
-            chat_history = gr.Chatbot(label='Hotel Chatbot', value=[["", "Hi! 😊 You are welcome to ask me any questions about the hotel or to book.If you want to book, I will require at least the following information: Full name, phone number, email address, booking start and finish dates, guest count, room type, number of rooms, payment method, breakfast."]], elem_id='chatbot', height=680)
+            chat_history = gr.Chatbot(
+                label='Hotel Chatbot',
+                value=[["", "Hi! 😊 You are welcome to ask me any questions about the hotel or to book.If you want to book, I will require at least the following information: Full name, phone number, email address, booking start and finish dates, guest count, room type, number of rooms, payment method, breakfast."]],
+                elem_id='chatbot',
+                height=680
+            )
         
         with gr.Row():
             with gr.Column(scale=5):
@@ -73,7 +99,7 @@ def create_demo():
         return demo, chat_history, text_input, submit_button
 
 def create_admin_interface():
-    with gr.Blocks(title="Admin's Document Uploading Page", theme="Soft") as app1:
+    with gr.Blocks(title="Admin's Document Uploading Page") as app1:
 
         with gr.Row():
             with gr.Column(scale=2):
@@ -95,21 +121,18 @@ def create_admin_interface():
 demo, chat_history, text_input, submit_button = create_demo()
 app1, uploaded_pdf, upload_status, password = create_admin_interface()
 
-# Create PDFChatBot instance
 pdf_chatbot = PDFChatBot()
 
-# Set up event handlers
 with demo:
     # Event handler for submitting text and generating response
     submit_button.click(
         pdf_chatbot.add_text, 
         inputs=[chat_history, text_input], 
-        outputs=[chat_history], 
-        queue=False
+        outputs=[chat_history]
     ).success(
         pdf_chatbot.generate_response, 
-        inputs=[chat_history, text_input, uploaded_pdf], 
-        outputs=[chat_history, text_input]
+        inputs=[chat_history, text_input], 
+        outputs=[chat_history, text_input],
     )
 
 with app1:
