@@ -13,17 +13,32 @@ class PDFChatBot:
     def render_file(self, files, password):
         # Prepare the files for the request
         files_dict = {}
-        for i, file in enumerate(files):
-            files_dict[f"file_{i}"] = (file.name, file, file.type)
-        
+
+        # Check if files is a list or a single file
+        if isinstance(files, list):
+            for i, file in enumerate(files):
+                if hasattr(file, 'read'):  # Check if it's a file-like object
+                    files_dict[f"files[{i}]"] = (file.name, file, 'application/octet-stream')
+                else:
+                    # Handle file paths or other types if necessary
+                    files_dict[f"files[{i}]"] = (f"file_{i}.txt", open(file, 'rb'), 'application/octet-stream')
+        else:
+            if hasattr(files, 'read'):  # If only one file is uploaded
+                files_dict["files"] = (files.name, files, 'application/octet-stream')
+            else:
+                files_dict["files"] = (f"file_0.txt", open(files, 'rb'), 'application/octet-stream')
+
         # Send the POST request with the files and password
         response = requests.post(f"{API_URL}/document-uploader", files=files_dict, data={"password": password})
-        
+
         # Handle the response
         if response.status_code == 200:
             return gr.update(visible=True, value="Document uploaded successfully!")
         else:
             return gr.update(visible=True, value=f"Error: {response.status_code} - {response.text}")
+
+
+
 
     def add_text(self, chat_history, text):
         chat_history.append({"role": "user", "content": text})
@@ -42,7 +57,7 @@ class PDFChatBot:
 def create_demo():
     with gr.Blocks(title="Hotel Booking Chatbot", theme="Soft") as demo:
         with gr.Row():
-            chat_history = gr.Chatbot(label='Hotel Chatbot', value=[["", "Hi! 😊 You can ask me a question about the hotel or you can book.\n I need at least these information if you want to book: full name, phone number, email, booking start date, booking end date, guest count, room type, number of rooms, payment method, breakfast."]], elem_id='chatbot', height=680)
+            chat_history = gr.Chatbot(label='Hotel Chatbot', value=[["", "Hi! 😊 You are welcome to ask me any questions about the hotel or to book.If you want to book, I will require at least the following information: Full name, phone number, email address, booking start and finish dates, guest count, room type, number of rooms, payment method, breakfast."]], elem_id='chatbot', height=680)
         
         with gr.Row():
             with gr.Column(scale=5):
@@ -59,8 +74,6 @@ def create_demo():
 
 def create_admin_interface():
     with gr.Blocks(title="Admin's Document Uploading Page", theme="Soft") as app1:
-        with gr.Row():
-            chat_history = gr.Chatbot(label='response', value=[], elem_id='response', height=100)
 
         with gr.Row():
             with gr.Column(scale=2):
