@@ -8,11 +8,15 @@ import string
 load_dotenv('.env')
 API_URL = os.getenv("API_URL")
 
-USERNAME = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(6))
-
 class PDFChatBot:
     def __init__(self):
-        self.username = "ADMIN"
+        self.username = ""
+    
+    def initialize_session(self, username):
+        if username is None:
+            username = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(6))
+        self.username = username
+        return username
 
     def render_file(self, files, password):
         files_dict = {}
@@ -48,10 +52,10 @@ class PDFChatBot:
         chat_history.append([text, ""])  # user message, assistant response placeholder
         return chat_history
 
-    def generate_response(self, chat_history, text):
-
-        print("[DEBUG] Username:", USERNAME)
-        response = requests.post(f"{API_URL}/question-answerer", data={"username": USERNAME, "question": text})
+    def generate_response(self, chat_history, text, session_id):
+        
+        print("[DEBUG] Username:", session_id)
+        response = requests.post(f"{API_URL}/question-answerer", data={"username": session_id, "question": text})
 
         if response.status_code == 200:
             try:
@@ -78,6 +82,8 @@ class PDFChatBot:
 # Gradio application setup
 def create_demo():
     with gr.Blocks(title="Hotel Booking Chatbot") as demo:
+        session_id = gr.State(value=None)
+
         with gr.Row():
             chat_history = gr.Chatbot(
                 label='Hotel Chatbot',
@@ -99,7 +105,7 @@ def create_demo():
     
 
 
-        return demo, chat_history, text_input, submit_button
+        return demo, chat_history, text_input, submit_button, session_id
 
 def create_admin_interface():
     with gr.Blocks(title="Admin's Document Uploading Page") as app1:
@@ -124,12 +130,18 @@ def create_admin_interface():
         return app1, uploaded_pdf, upload_status, password, loading_message
 
 # Create Gradio interfaces
-demo, chat_history, text_input, submit_button = create_demo()
+demo, chat_history, text_input, submit_button, session_id = create_demo()
 app1, uploaded_pdf, upload_status, password, loading_message = create_admin_interface()
 
 pdf_chatbot = PDFChatBot()
 
 with demo:
+    # Initialize session ID on the first load
+    demo.load(
+        pdf_chatbot.initialize_session, 
+        inputs=[session_id], 
+        outputs=[session_id]
+    )
     # Event handler for submitting text and generating response
     submit_button.click(
         pdf_chatbot.add_text, 
@@ -137,7 +149,7 @@ with demo:
         outputs=[chat_history]
     ).success(
         pdf_chatbot.generate_response, 
-        inputs=[chat_history, text_input], 
+        inputs=[chat_history, text_input, session_id], 
         outputs=[chat_history, text_input],
     )
 
