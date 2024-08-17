@@ -8,6 +8,8 @@ import string
 load_dotenv('.env')
 API_URL = os.getenv("API_URL")
 
+USERNAME = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(6))
+
 class PDFChatBot:
     def __init__(self):
         self.username = "ADMIN"
@@ -47,10 +49,9 @@ class PDFChatBot:
         return chat_history
 
     def generate_response(self, chat_history, text):
-        characters = string.ascii_letters + string.digits
-        username = ''.join(random.choice(characters) for _ in range(6))
 
-        response = requests.post(f"{API_URL}/question-answerer", data={"username": username, "question": text})
+        print("[DEBUG] Username:", USERNAME)
+        response = requests.post(f"{API_URL}/question-answerer", data={"username": USERNAME, "question": text})
 
         if response.status_code == 200:
             try:
@@ -95,6 +96,8 @@ def create_demo():
 
             with gr.Column(scale=1):
                 submit_button = gr.Button('Send')
+    
+
 
         return demo, chat_history, text_input, submit_button
 
@@ -139,7 +142,6 @@ with demo:
     )
 
 with app1:
-
     def show_loading():
         # Just show the loading message
         return gr.update(visible=True)

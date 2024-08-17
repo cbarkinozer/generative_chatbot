@@ -6,7 +6,7 @@ class Memory:
 
     def save(self, question, answer) -> None:
         concatenated_memory = ''.join(self.memory_deque)
-        if len(self.memory_deque) >= 3 or (len(concatenated_memory) + len(question)) > 1000:
+        if len(self.memory_deque) >= 5 or (len(concatenated_memory) + len(question)) > 1000:
             self.memory_deque.popleft()      
         self.memory_deque.append(f"<Previous Question>: {question} <Previous Answer>: {answer}")
     

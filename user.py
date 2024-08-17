@@ -12,5 +12,8 @@ class User:
     def set_booking(self, booking:Booking):
         self.booking = booking
     
+    def get_booking(self):
+        return self.booking
+    
     def set_llm(self, llm):
         self.llm = llm

@@ -2,7 +2,7 @@ import re
 from datetime import datetime
 
 class Booking:
-    def __init__(self, full_name:str, phone_number:str, email:str, start_date:str, end_date:str, guest_count:int, room_type:str, number_of_rooms:int, payment_method:str, include_breakfast:bool, note:str=None):
+    def __init__(self, full_name:str=None, phone_number:str=None, email:str=None, start_date:str=None, end_date:str=None, guest_count:int=None, room_type:str=None, number_of_rooms:int=None, payment_method:str=None, include_breakfast:bool=None, note:str=None):
         self.full_name = full_name
         self.phone_number = phone_number
         self.email = email
@@ -15,7 +15,7 @@ class Booking:
         self.include_breakfast = include_breakfast
         self.note = note if note else {}
 
-    def display_booking_details(self):
+    def show_booking_details(self):
         details = (
             f"Name: {self.full_name}\n"
             f"Phone Number: {self.phone_number}\n"
@@ -27,7 +27,7 @@ class Booking:
             f"Number of Rooms: {self.number_of_rooms}\n"
             f"Payment Method: {self.payment_method}\n"
             f"Include Breakfast: {self.include_breakfast}\n"
-            f"Extra Details: {self.note}"
+            f"Extra Details: {self.note}\n"
         )
         return details
 

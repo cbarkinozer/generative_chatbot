@@ -100,9 +100,15 @@ async def ask_question(user: User, question: str) -> tuple[str, int]:
     And I wanted learn first that can I book a conference room?
     Because if we will book your hotel I need a place to do meetings.
     Thanks.
-
     <AI>:
     question
+    
+    <Example 3>
+    <Human>:
+    I want breakfast. burak@gmail.com. credit card. Burak Çivit.
+
+    <AI>:
+    booking
     
     Now it's your turn:
     """
@@ -151,6 +157,8 @@ async def _book(user: User, question: str):
     Phone number must be between 10 and 15 digits.
     Include breakfast must be a boolean.
 
+    If you can not find the value just leave that field empty like this: ""
+
     <Example>
     <Human>:
     Hi, I am Barkın Özer. You can call me from 5365363636 or mail me at c.barkinozer@gmail.com, We plan to be there at 15 August 2024 between 00.00 pm to 02.00 pm and leave at the 24 th.
@@ -175,7 +183,8 @@ async def _book(user: User, question: str):
     Now it's your turn:
     """
     memory = user.memory.get_memory()
-    prompt = f" System Message: {system_message} <Question>: {question} <Memory>: {memory}"
+    date = f"Current date (Year-Month-Date Hour-Minute-Second): {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    prompt = f" System Message: {system_message} <Question>: {question} <Memory>: {memory}, <Date>: {date}"
     print("[DEBUG] Memory: ", memory)
     
     json_string = await _ask_llm(user=user, prompt=prompt)
@@ -189,7 +198,6 @@ async def _book(user: User, question: str):
         return "For me to book you, please tell me your full name, phone number, email, booking start date, booking end date, guest count, room type, number of rooms, payment method. Also do you want breakfast too?", memory, 200
 
     print(data)
-    
     
     # Check for each key and assign if it exists
     full_name = data['full_name'] if 'full_name' in data else None
@@ -207,6 +215,7 @@ async def _book(user: User, question: str):
     scrapped_data = {
         "full_name":full_name,
         "phone_number":phone_number,
+        "email": email,
         "start_date":start_date,
         "end_date":end_date,
         "guest_count":guest_count,
@@ -218,72 +227,28 @@ async def _book(user: User, question: str):
     }
 
     none_fields = []
+    booking = user.get_booking()
+
+    if booking is None:
+        booking = Booking()
+
     for field_name, value in scrapped_data.items():
-        if (value == "" or value is None) and value != "note":
+        if (value == "" or value is None) and (field_name != "note" and getattr(booking, field_name) is None):
             none_fields.append(field_name)
-        
+        else:
+            setattr(booking, field_name, value)
+
+    user.set_booking(booking=booking)
+    
     if none_fields:
         return f"You need to tell me these information as well please: {', '.join(none_fields)}", None, None, 200
-
-    is_booking_valid = False
-
-    booking = Booking(full_name=full_name, phone_number=phone_number, email=email, start_date=start_date, end_date=end_date, guest_count=guest_count, room_type=room_type, number_of_rooms=number_of_rooms, payment_method=payment_method, include_breakfast=include_breakfast, note=note)
-    is_booking_valid, validation_message = booking.is_valid()
-
-    if not is_booking_valid:
-        system_message = """
-        You are a json fixer.
-        Your goal is to fix the values in the json accordding to the validation message you will receive.
-
-        <Example>
-        <Question>:
-        Hi, I am Barkın Özer. You can call me from 5365363636 or mail me at barkinozer@gmail.com, We plan to be there at 15 August 2024 between 00.00 pm to 02.00 pm and leave at the 22 th.
-        Me and my girlfriend will stay on an economy room. I am planning to pay with visa card. We want breakfasts as well. Please include that.
-        Also can you add spa to our gym plan as well? Thanks.
-        <JSON>:
-        fields = {
-            "full_name": "Barkın Özer",
-            "phone_number": "5365363636",
-            "email": "barkinozer@gmail.com",
-            "start_date": "15 August 2022",
-            "end_date": "22th",
-            "guest_count": 2,
-            "room_type": "Economy Room",
-            "number_of_rooms": 0,
-            "payment_method": "visa card",
-            "include_breakfast": "Yes",
-        }
-        <Validation Message>:
-        Dates must be in YYYY-MM-DD format.
-
-        <AI>:
-        fields = {
-            "full_name": "Barkın Özer",
-            "phone_number": "5365363636",
-            "email": "barkinozer@gmail.com",
-            "start_date": "2024-08-15",
-            "end_date": "2024-08-22",
-            "guest_count": 2,
-            "room_type": "Economy Room",
-            "number_of_rooms": 1,
-            "payment_method": "credit card",
-            "include_breakfast": true,
-            "note": "Visa card will be used as credit card. Spa will be added to the gym plan. Planning to arrive between 00.00 pm to 02.00 pm."
-        }
-        
-        Now, it's your turn:
-        """
-        prompt = f" System Message: {system_message}\n <Question>: {question}\n <JSON>: {json_string}\n <Validation Message>: {validation_message}\n"
-        user.set_llm(llm="gemini-pro")
-        json_string = await _ask_llm(user=user, prompt=prompt)
-        booking = Booking(full_name=full_name, phone_number=phone_number, email=email, start_date=start_date, end_date=end_date, guest_count=guest_count, room_type=room_type, number_of_rooms=number_of_rooms, payment_method=payment_method, include_breakfast=include_breakfast, note=note)
-        is_booking_valid, validation_message = booking.is_valid()
-
-    if not is_booking_valid:
-        return f"Booking validation is not met: {validation_message}", memory, system_message, 400
     
-    user.set_booking(booking=booking)
-    return "Booking added successfully!", memory, system_message, 200
+    is_valid, message = booking.is_valid()
+    
+    if not is_valid:
+        return message, None, None, 400
+    
+    return f"Booking added successfully!\n {user.booking.show_booking_details()}", memory, system_message, 200
 
 async def _get_saved_user(user: User) -> User:
     if user.username in USER_STORE:
@@ -342,13 +307,17 @@ async def _rag(user: User, question: str):
     Yes, we have an indoor swimming pool available for all guests at no extra charge.
     Feel free to use it whenever you like during your stay.
     If you have any other questions or need further assistance, don't hesitate to ask!
+    <Date>:
+    Current date (Year-Month-Date Hour-Minute-Second): 2024-08-17 20:09:44.988306
+
     <AI>:
     We have a single indoor swimming pool.
     Do you have any other questions?
 
     Now it's your turn:
     """
-    prompt = f" System Message: {system_message} <Question>: {question} <Information>: {answer} <Memory>: {memory}"
+    date = f"Current date (Year-Month-Date Hour-Minute-Second): {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    prompt = f" System Message: {system_message} <Question>: {question} <Information>: {answer} <Memory>: {memory}, <Date>: {date}"
     print("[DEBUG] Memory: ",memory)
 
     answer = await _ask_llm(user=user, prompt=prompt)

@@ -1,6 +1,9 @@
 Q: What is the name of your hotel?
 A: Hotel Barkın.
 
+Q: What is the email of the hotel?
+A: hotel.barkin@gmail.com
+
 Q: Can you book me?
 A: For me to book you, please tell me your full name, phone number, email, booking start date, booking end date, guest count, room type, number of rooms, payment method. Also do you want breakfast too?
 

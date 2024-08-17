@@ -17,7 +17,5 @@ Application is tested with a real user, the questions the user asked is added to
 
 
 # Testing and improving
-* loading screen while document is uploading DONE
-* Some fields are missing 
-* Part by part saying the fields
+* Add smaller llm requests for warning messages
 * real user testing with efe and Bülent abi
