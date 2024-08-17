@@ -100,26 +100,29 @@ def create_demo():
 
 def create_admin_interface():
     with gr.Blocks(title="Admin's Document Uploading Page") as app1:
-
         with gr.Row():
             with gr.Column(scale=2):
                 password = gr.Textbox(
                     show_label=False,
                     placeholder="Admin password to upload document.",
                     container=False,
+                    type='password'
                 )
 
             with gr.Column(scale=2):
                 uploaded_pdf = gr.UploadButton("📁 Upload Document", file_types=[".txt,.pdf,.docx"])
-        
+
         # Hidden component to show success/failure messages
         upload_status = gr.Textbox(visible=False, label="Upload Status")
 
-        return app1, uploaded_pdf, upload_status, password
+        # Loading message that will be displayed during the upload
+        loading_message = gr.Textbox(label="Uploading...", visible=False, interactive=False)
+
+        return app1, uploaded_pdf, upload_status, password, loading_message
 
 # Create Gradio interfaces
 demo, chat_history, text_input, submit_button = create_demo()
-app1, uploaded_pdf, upload_status, password = create_admin_interface()
+app1, uploaded_pdf, upload_status, password, loading_message = create_admin_interface()
 
 pdf_chatbot = PDFChatBot()
 
@@ -136,8 +139,31 @@ with demo:
     )
 
 with app1:
-    # Event handler for uploading a PDF
-    uploaded_pdf.upload(pdf_chatbot.render_file, inputs=[uploaded_pdf, password], outputs=[upload_status])
+
+    def show_loading():
+        # Just show the loading message
+        return gr.update(visible=True)
+
+    def handle_upload(uploaded_pdf, password):
+        # Perform the file processing
+        result = pdf_chatbot.render_file(uploaded_pdf, password)
+        
+        # Hide loading message and show upload status
+        return gr.update(visible=False), result
+    
+    # First, show the loading message when the upload starts
+    uploaded_pdf.upload(
+        fn=show_loading,
+        inputs=[],
+        outputs=[loading_message]
+    )
+
+    # Then, process the file and update the status
+    uploaded_pdf.upload(
+        fn=handle_upload,
+        inputs=[uploaded_pdf, password],
+        outputs=[loading_message, upload_status]
+    )
 
 if __name__ == "__main__":
     # Combine the chatbot interface with other tabs

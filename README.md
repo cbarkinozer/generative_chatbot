@@ -14,3 +14,10 @@ Application is tested with a real user, the questions the user asked is added to
 * On the user-ui, user will ask questions or can book. Booking or question answering is decided as function calling.
 * If question answered is selected: In question answering questions are answered from given document.
 * If booking is selected: question is asked and json filled and checked if all values are set if not asked back. If all values are set one last approve is asked and later save on sql built-in database.
+
+
+# Testing and improving
+* loading screen while document is uploading DONE
+* Some fields are missing 
+* Part by part saying the fields
+* real user testing with efe and Bülent abi
