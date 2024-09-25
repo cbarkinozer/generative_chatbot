@@ -173,7 +173,7 @@ async def _book(user: User, question: str):
         "start_date": "2024-08-15",
         "end_date": "2024-08-24",
         "guest_count": 2,
-        "room_type": "Economy Room",
+        "room_type": "single",
         "number_of_rooms": 1,
         "payment_method": "credit card",
         "include_breakfast": true,
