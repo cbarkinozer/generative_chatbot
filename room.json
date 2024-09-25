@@ -1,0 +1,8 @@
+{
+  "rooms": [
+    { "room_type": "Standard Room", "count": 24 },
+    { "room_type": "Deluxe Room", "count": 12 },
+    { "room_type": "Family Room", "count": 6 },
+    { "room_type": "Junior Suite Room", "count": 3 }
+  ]
+}

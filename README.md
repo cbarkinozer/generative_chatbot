@@ -4,6 +4,11 @@ A chatbot that can answer questions and do booking using natural language input.
 UI is gradio because it is easy to integrate in a website.
 Single page dummy fasthtml website will created and gradio project will be integrated.
 
+For small model requests (the error message format, not main operations), it is possible to use Ollama and phi-3.5 to run on CPU but for ease free API request to Groq is preffered.
+Also it can increase latency and might not do function calling.
+
+create the room state and reservation system and connect them with llm
+
 # Simple booking dialogues 
 Simple booking dialogues that are used can be found in document.txt.  
 LLMs are utilized to generate example question answer pairs to do Retrieval Augmented Generation.  

@@ -4,3 +4,4 @@ chatbot/*
 encoder/*
 *.pkl
 log.txt
+*.db
