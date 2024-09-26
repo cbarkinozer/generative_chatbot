@@ -30,6 +30,23 @@ class Booking:
             f"Extra Details: {self.note}\n"
         )
         return details
+    
+    def get_booking_details(self) -> dict:
+        details = {
+            "Name": self.full_name,
+            "Phone Number": self.phone_number,
+            "Email": self.email,
+            "Start Date": self.start_date,
+            "End Date": self.end_date,
+            "Guest Count": self.guest_count,
+            "Room Type": self.room_type,
+            "Number of Rooms": self.number_of_rooms,
+            "Payment Method": self.payment_method,
+            "Include Breakfast": self.include_breakfast,
+            "Extra Details": self.note
+        }
+        return details
+
 
     def is_valid(self):
         

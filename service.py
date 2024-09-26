@@ -16,6 +16,7 @@ import io
 from dotenv import load_dotenv
 import json
 from booking import Booking
+from room import check_room_availability, reserve_room, cancel_reservation
 
 USER_STORE = {}
 
@@ -76,7 +77,8 @@ async def ask_question(user: User, question: str) -> tuple[str, int]:
     user = await _get_saved_user(user)
     system_message = """
     Your goal is deciding (classifying) if the customer in the inquiry is booking or not yet decided and just asking questions.
-    If inquiry is a booking request, say ONLY "booking".
+    If inquiry wants to book / reserve, say ONLY "reserve".
+    If inquiry wants to cancel book / reserve, say ONLY "cancel".
     Booking/reservation requests include information about the customer and their vacation plan.
     If customer is not yet decided to book, ONLY say "question".
 
@@ -91,7 +93,7 @@ async def ask_question(user: User, question: str) -> tuple[str, int]:
     Additionally, could you please add access to the spa to our gym plan?
     Thanks.
     <AI>:
-    booking
+    reserve
 
     <Example 2>
     <Human>:
@@ -115,9 +117,11 @@ async def ask_question(user: User, question: str) -> tuple[str, int]:
     prompt = f" System Message: {system_message} <Inquiry>: {question}"
     selected_function = await _ask_llm(user=user,prompt=prompt)
     
-    if "book" in selected_function.lower():
+    if "reserve" in selected_function.lower():
         final_answer, memory, system_message, http_code = await _book(user, question)
-    if "question" in selected_function.lower():
+    if "cancel" in selected_function.lower():
+        final_answer, memory, system_message, http_code = await _cancel(user, question)
+    elif "question" in selected_function.lower():
         final_answer, memory, system_message, http_code = await _rag(user, question)
     else:
         "Can you explain your request in a different way with more details? I could not understand.", memory, system_message, 400
@@ -248,7 +252,12 @@ async def _book(user: User, question: str):
     if not is_valid:
         return message, None, None, 400
     
-    return f"Booking added successfully!\n {user.booking.show_booking_details()}", memory, system_message, 200
+    details = user.booking.get_booking_details()
+    reservation_response = user.get_hotel_management().reserve_room(full_name=details["full_name"], phone_number=details["phone_number"], email=details["email"], room_type=details["room_type"],
+                                             start_date=details["start_date"],end_date=details["end_date"],guest_count=details["guest_count"],number_of_rooms=details["number_of_rooms"],
+                                             payment_method=details["payment_method"],include_breakfast=details["include_breakfast"],note=details["note"])
+    
+    return f"Booking request send: {reservation_response}", memory, system_message, 200
 
 async def _get_saved_user(user: User) -> User:
     if user.username in USER_STORE:

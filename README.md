@@ -7,7 +7,7 @@ Single page dummy fasthtml website will created and gradio project will be integ
 For small model requests (the error message format, not main operations), it is possible to use Ollama and phi-3.5 to run on CPU but for ease free API request to Groq is preffered.
 Also it can increase latency and might not do function calling.
 
-create the room state and reservation system and connect them with llm
+connect demo reservation system with our system and test
 
 # Simple booking dialogues 
 Simple booking dialogues that are used can be found in document.txt.  
@@ -22,5 +22,4 @@ Application is tested with a real user, the questions the user asked is added to
 
 
 # Testing and improving
-* Add smaller llm requests for warning messages
-* real user testing with efe and Bülent abi
+* The example booking system has flaws
