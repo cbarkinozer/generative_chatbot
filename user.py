@@ -10,9 +10,16 @@ class User:
         self.memory = Memory()
         self.hotel_management = HotelManager()
         self.booking = None
+        self.room_id = None
     
     def set_booking(self, booking:Booking):
         self.booking = booking
+    
+    def set_room_id(self, room_id:int):
+        self.room_id = room_id
+    
+    def get_room_id(self):
+        return self.room_id
     
     def get_booking(self):
         return self.booking

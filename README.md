@@ -7,8 +7,6 @@ Single page dummy fasthtml website will created and gradio project will be integ
 For small model requests (the error message format, not main operations), it is possible to use Ollama and phi-3.5 to run on CPU but for ease free API request to Groq is preffered.
 Also it can increase latency and might not do function calling.
 
-connect demo reservation system with our system and test
-
 # Simple booking dialogues 
 Simple booking dialogues that are used can be found in document.txt.  
 LLMs are utilized to generate example question answer pairs to do Retrieval Augmented Generation.  

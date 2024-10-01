@@ -16,7 +16,6 @@ import io
 from dotenv import load_dotenv
 import json
 from booking import Booking
-from room import check_room_availability, reserve_room, cancel_reservation
 
 USER_STORE = {}
 
@@ -108,9 +107,14 @@ async def ask_question(user: User, question: str) -> tuple[str, int]:
     <Example 3>
     <Human>:
     I want breakfast. burak@gmail.com. credit card. Burak Çivit.
-
     <AI>:
     booking
+
+    <Example 4>
+    <Human>:
+    I changed my mind, cancel my booking / reservation.
+    <AI>:
+    cancel
     
     Now it's your turn:
     """
@@ -132,6 +136,12 @@ async def ask_question(user: User, question: str) -> tuple[str, int]:
     await _log(user=user, memory=memory, question=question, selected_function= selected_function, final_answer = final_answer)
 
     return final_answer, http_code
+
+async def _cancel(user:User):
+    room_id = user.get_room_id()
+    user.get_hotel_management().cancel_reservation(room_id)
+    return f"Your reservation is cancelled for the room with the room id {room_id}", None, None, 200
+
 
 async def _book(user: User, question: str):
 
@@ -253,10 +263,10 @@ async def _book(user: User, question: str):
         return message, None, None, 400
     
     details = user.booking.get_booking_details()
-    reservation_response = user.get_hotel_management().reserve_room(full_name=details["full_name"], phone_number=details["phone_number"], email=details["email"], room_type=details["room_type"],
+    reservation_id, reservation_response = user.get_hotel_management().reserve_room(full_name=details["full_name"], phone_number=details["phone_number"], email=details["email"], room_type=details["room_type"],
                                              start_date=details["start_date"],end_date=details["end_date"],guest_count=details["guest_count"],number_of_rooms=details["number_of_rooms"],
                                              payment_method=details["payment_method"],include_breakfast=details["include_breakfast"],note=details["note"])
-    
+    user.set_reservation_id(reservation_id=reservation_id)
     return f"Booking request send: {reservation_response}", memory, system_message, 200
 
 async def _get_saved_user(user: User) -> User:

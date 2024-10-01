@@ -5,11 +5,28 @@ import json
 
 class HotelManager:
     def __init__(self, db_name="hotel.db"):
-        if os.path.exists(db_name):
-            os.remove(db_name)
+        # Connect to the database
         self.conn = sqlite3.connect(db_name)
+        # Drop all tables before recreating them
+        self.drop_all_tables()
+        # Recreate tables and initialize room data
         self.create_tables()
         self.initialize_rooms(rooms_file="room.json")
+
+    def drop_all_tables(self):
+        cursor = self.conn.cursor()
+        cursor.execute("PRAGMA foreign_keys = OFF;")  # Disable foreign key constraints temporarily
+
+        # Get all table names, excluding sqlite_sequence
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name != 'sqlite_sequence';")
+        tables = cursor.fetchall()
+
+        # Drop each table
+        for table_name in tables:
+            cursor.execute(f"DROP TABLE IF EXISTS {table_name[0]};")
+
+        self.conn.commit()
+        cursor.execute("PRAGMA foreign_keys = ON;")  # Re-enable foreign key constraints
 
     def create_tables(self):
         cursor = self.conn.cursor()
@@ -93,7 +110,7 @@ class HotelManager:
         room = cursor.fetchone()
         return room if room else None
 
-    def reserve_room(self, full_name, phone_number, email, room_type, start_date, end_date, guest_count, number_of_rooms, payment_method, include_breakfast, note):
+    def reserve_room(self, full_name, phone_number, email, room_type, start_date, end_date, guest_count, number_of_rooms, payment_method, include_breakfast, note) -> tuple[int, str]:
         if not self.is_valid_date_format(start_date) or not self.is_valid_date_format(end_date):
             return "Invalid date format. Please use YYYY-MM-DD."
 
@@ -115,18 +132,32 @@ class HotelManager:
             cursor.execute('''UPDATE rooms SET is_available = 0 WHERE room_id = ?''', (room_id,))
 
             self.conn.commit()
-            return f"Room {room_id} reserved from {start_date} to {end_date}."
+            return room_id, f"Room {room_id} reserved from {start_date} to {end_date}."
         else:
             return "No available rooms for the selected type and dates."
 
-
     def cancel_reservation(self, room_id):
         cursor = self.conn.cursor()
-        cursor.execute('''DELETE FROM reservation_rooms WHERE room_id = ?''', (room_id,))
-        cursor.execute('''DELETE FROM reservations WHERE room_id = ?''', (room_id,))
-        cursor.execute('''UPDATE rooms SET is_available = 1 WHERE room_id = ?''', (room_id,))
-        self.conn.commit()
-        return f"Reservation for Room {room_id} has been canceled."
+
+        # Get the reservation_id from reservation_rooms table for the given room_id
+        cursor.execute('''SELECT reservation_id FROM reservation_rooms WHERE room_id = ?''', (room_id,))
+        reservation = cursor.fetchone()
+
+        if reservation:
+            reservation_id = reservation[0]
+            # Delete from reservation_rooms table
+            cursor.execute('''DELETE FROM reservation_rooms WHERE room_id = ?''', (room_id,))
+
+            # Delete from reservations table using reservation_id
+            cursor.execute('''DELETE FROM reservations WHERE reservation_id = ?''', (reservation_id,))
+
+            # Update room availability
+            cursor.execute('''UPDATE rooms SET is_available = 1 WHERE room_id = ?''', (room_id,))
+
+            self.conn.commit()
+            return f"Reservation for Room {room_id} has been canceled."
+        else:
+            return f"No reservation found for Room {room_id}."
 
     def release_past_reservations(self):
         today = datetime.today().strftime('%Y-%m-%d')
@@ -137,13 +168,12 @@ class HotelManager:
         self.conn.commit()
         return "Past reservations released and rooms marked as available."
 
-
 if __name__ == "__main__":
     hotel_manager = HotelManager()
     start_date = '2024-09-25'
     end_date = '2024-09-26'
-    print(hotel_manager.reserve_room("Barkın Öz", "5365363636", "c.barkinozer@gmail.com", "suite", "2024-10-01", "2024-10-05", 2, 1, "credit card", True, "Planning to arrive between 00:00 and 02:00."))
+    room_id, room_str = hotel_manager.reserve_room("Barkın Öz", "5365363636", "c.barkinozer@gmail.com", "suite", "2024-10-01", "2024-10-05", 2, 1, "credit card", True, "Planning to arrive between 00:00 and 02:00.")
+    print(hotel_manager.cancel_reservation(room_id=room_id))
     print(hotel_manager.reserve_room("Barkın Öz", "5365363636", "c.barkinozer@gmail.com", "suite", "2024-10-01", "2024-10-05", 2, 1, "credit card", True, "Planning to arrive between 00:00 and 02:00."))
     print(hotel_manager.reserve_room("Barkın Öz", "5365363636", "c.barkinozer@gmail.com", "suite", "2024-10-01", "2024-10-05", 2, 1, "credit card", True, "Planning to arrive between 00:00 and 02:00."))
     print(hotel_manager.reserve_room("Barkın Öz", "5365363636", "c.barkinozer@gmail.com", "suite", "2024-10-06", "2024-10-08", 2, 1, "credit card", True, "Planning to arrive between 00:00 and 02:00."))
-    
