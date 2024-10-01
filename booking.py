@@ -33,17 +33,17 @@ class Booking:
     
     def get_booking_details(self) -> dict:
         details = {
-            "Name": self.full_name,
-            "Phone Number": self.phone_number,
-            "Email": self.email,
-            "Start Date": self.start_date,
-            "End Date": self.end_date,
-            "Guest Count": self.guest_count,
-            "Room Type": self.room_type,
-            "Number of Rooms": self.number_of_rooms,
-            "Payment Method": self.payment_method,
-            "Include Breakfast": self.include_breakfast,
-            "Extra Details": self.note
+            "full_name": self.full_name,
+            "phone_number": self.phone_number,
+            "email": self.email,
+            "start_date": self.start_date,
+            "end_date": self.end_date,
+            "guest_count": self.guest_count,
+            "room_type": self.room_type,
+            "number_of_rooms": self.number_of_rooms,
+            "payment_method": self.payment_method,
+            "include_breakfast": self.include_breakfast,
+            "note": self.note
         }
         return details
 
@@ -59,6 +59,9 @@ class Booking:
 
         if start_date >= end_date:
             return False, "End date must be after start date."
+        
+        if self.room_type != 'single' and self.room_type != 'double' and self.room_type != 'suite':
+            return False, "Room type can be either single, double, or suite."
 
         # Guest count check
         if self.guest_count <= 0:

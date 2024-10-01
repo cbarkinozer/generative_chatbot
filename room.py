@@ -1,6 +1,5 @@
 import sqlite3
 from datetime import datetime
-import os
 import json
 
 class HotelManager:
@@ -112,7 +111,7 @@ class HotelManager:
 
     def reserve_room(self, full_name, phone_number, email, room_type, start_date, end_date, guest_count, number_of_rooms, payment_method, include_breakfast, note) -> tuple[int, str]:
         if not self.is_valid_date_format(start_date) or not self.is_valid_date_format(end_date):
-            return "Invalid date format. Please use YYYY-MM-DD."
+            return None, "Invalid date format. Please use YYYY-MM-DD."
 
         cursor = self.conn.cursor()
         room = self.check_room_availability(room_type, start_date, end_date)
@@ -134,9 +133,9 @@ class HotelManager:
             self.conn.commit()
             return room_id, f"Room {room_id} reserved from {start_date} to {end_date}."
         else:
-            return "No available rooms for the selected type and dates."
+            return None, "No available rooms for the selected type and dates."
 
-    def cancel_reservation(self, room_id):
+    def cancel_reservation(self, room_id) -> str:
         cursor = self.conn.cursor()
 
         # Get the reservation_id from reservation_rooms table for the given room_id
@@ -159,7 +158,7 @@ class HotelManager:
         else:
             return f"No reservation found for Room {room_id}."
 
-    def release_past_reservations(self):
+    def release_past_reservations(self) -> str:
         today = datetime.today().strftime('%Y-%m-%d')
         cursor = self.conn.cursor()
         cursor.execute('''DELETE FROM reservations WHERE end_date < ?''', (today,))
@@ -172,7 +171,7 @@ if __name__ == "__main__":
     hotel_manager = HotelManager()
     start_date = '2024-09-25'
     end_date = '2024-09-26'
-    room_id, room_str = hotel_manager.reserve_room("Barkın Öz", "5365363636", "c.barkinozer@gmail.com", "suite", "2024-10-01", "2024-10-05", 2, 1, "credit card", True, "Planning to arrive between 00:00 and 02:00.")
+    room_id, room_str = hotel_manager.reserve_room("Barkın Öz", "5365363636", "c.barkinozer@gmail.com", "single", "2024-10-03", "2024-10-07", 1, 1, "credit card", True, "Planning to arrive between 00:00 and 02:00.")
     print(hotel_manager.cancel_reservation(room_id=room_id))
     print(hotel_manager.reserve_room("Barkın Öz", "5365363636", "c.barkinozer@gmail.com", "suite", "2024-10-01", "2024-10-05", 2, 1, "credit card", True, "Planning to arrive between 00:00 and 02:00."))
     print(hotel_manager.reserve_room("Barkın Öz", "5365363636", "c.barkinozer@gmail.com", "suite", "2024-10-01", "2024-10-05", 2, 1, "credit card", True, "Planning to arrive between 00:00 and 02:00."))

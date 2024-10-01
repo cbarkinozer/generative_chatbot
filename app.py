@@ -25,7 +25,7 @@ async def check_health():
 async def document_uploader(files: list[UploadFile] = File(...), password: str = Form(...)):
     user = User(username="ADMIN")
     response, status_code = await upload_documents(user, files, password)
-    if status_code == 200:
+    if status_code == 200 or status_code == 400:
         return {"response": response}
     else:
         raise HTTPException(status_code=status_code, detail=response)
@@ -34,7 +34,7 @@ async def document_uploader(files: list[UploadFile] = File(...), password: str =
 async def question_answerer(username: str = Form(...), question: str = Form(...)):
     user = User(username=username)
     response, status_code = await ask_question(user, question)
-    if status_code == 200:
+    if status_code == 200 or status_code == 400:
         return {"response": response}
     else:
         raise HTTPException(status_code=status_code, detail=response)

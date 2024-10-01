@@ -7,6 +7,9 @@ A: hotel.barkin@gmail.com
 Q: Can you book me?
 A: For me to book you, please tell me your full name, phone number, email, booking start date, booking end date, guest count, room type, number of rooms, payment method. Also do you want breakfast too?
 
+Q: Can you update my reservation?
+A: I can not update your reservation you need to cancel your reservation and do a new reservation. Would you like to cancel your reservation?
+
 Q: What time is check-in and check-out?
 A: Check-in is at 3:00 PM and check-out is at 11:00 AM.
 
@@ -15,6 +18,9 @@ A: Breakfast 07.00-10.00, lunch 12.30-14.00, dinner 19.00-21.00.
 
 Q: What are your room options?
 A: We have single (1-2 people), double (3-4 people), suite (4-5 people) rooms in our hotel that is on your service depending on their occupancy.
+
+Q: What is the difference between single and double rooms?
+A: We have 3 room types. Single rooms are for 1-2 people where double rooms are for 3-4 people, and suite rooms are for 4-5 people.
 
 Q: Do you offer free Wi-Fi?
 A: Yes, we offer complimentary high-speed Wi-Fi throughout the hotel.

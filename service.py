@@ -75,56 +75,57 @@ async def ask_question(user: User, question: str) -> tuple[str, int]:
     
     user = await _get_saved_user(user)
     system_message = """
-    Your goal is deciding (classifying) if the customer in the inquiry is booking or not yet decided and just asking questions.
-    If inquiry wants to book / reserve, say ONLY "reserve".
-    If inquiry wants to cancel book / reserve, say ONLY "cancel".
-    Booking/reservation requests include information about the customer and their vacation plan.
-    If customer is not yet decided to book, ONLY say "question".
+        Your task is to classify customer inquiries related to booking or reservation.
+        Based on the content of the inquiry, provide the appropriate response from the following options:
 
-    <Example 1>
-    <Human>:
-    Hello,  My name is Arda Yılmaz.
-    You can reach me at 123-456-7890 or via email at arda.yilmaz@example.com.
-    We plan to arrive on September 10, 2024, between 1:00 PM and 3:00 PM, and depart on September 20, 2024.
-    My wife and I will be staying in an economy room.
-    I intend to pay with a MasterCard.
-    We would also like to include breakfasts with our stay. 
-    Additionally, could you please add access to the spa to our gym plan?
-    Thanks.
-    <AI>:
-    reserve
+        If the customer explicitly wants to book or reserve, respond with "booking".
+        If the customer wants to cancel a booking or reservation, respond with "cancel".
+        If the customer is still undecided and is asking questions or gathering information, respond with "question".
+        
+        Important Notes:
+        Booking or reservation inquiries include details about the customer's stay, such as dates, accommodation type, payment methods, or additional services.
+        Your responses should only include one word from the options: "booking", "cancel", or "question".
+        
+        Examples:
+        Example 1:
+        <Human>:
+        Hello, My name is Arda Yılmaz. You can reach me at 123-456-7890 or via email at arda.yilmaz@example.com. We plan to arrive on September 10, 2024, between 1:00 PM and 3:00 PM, and depart on September 20, 2024. My wife and I will be staying in an economy room. I intend to pay with a MasterCard. We would also like to include breakfasts with our stay. Additionally, could you please add access to the spa to our gym plan? Thanks.
+        <AI>:
+        booking
 
-    <Example 2>
-    <Human>:
-    Hey I am Barkın Özer.
-    I am planning a vacation in Antalya in 5 August 2024.
-    And I wanted learn first that can I book a conference room?
-    Because if we will book your hotel I need a place to do meetings.
-    Thanks.
-    <AI>:
-    question
-    
-    <Example 3>
-    <Human>:
-    I want breakfast. burak@gmail.com. credit card. Burak Çivit.
-    <AI>:
-    booking
+        Example 2:
+        <Human>:
+        Hey, I am Barkın Özer. I am planning a vacation in Antalya on August 5, 2024. I wanted to know first, can I book a conference room? Because if we decide to book your hotel, I need a place to do meetings. Thanks.
+        <AI>:
+        question
 
-    <Example 4>
-    <Human>:
-    I changed my mind, cancel my booking / reservation.
-    <AI>:
-    cancel
-    
-    Now it's your turn:
+        Example 3:
+        <Human>:
+        I want breakfast. burak@gmail.com. credit card. Burak Çivit.
+        <AI>:
+        booking
+
+        Example 4:
+        <Human>:
+        yes sorry, it is barorkar@gmail.com
+        <AI>:
+        booking
+
+        Example 5:
+        <Human>:
+        I changed my mind. Please cancel my booking/reservation.
+        <AI>:
+        cancel
+
+        Now it's your turn:
     """
     prompt = f" System Message: {system_message} <Inquiry>: {question}"
     selected_function = await _ask_llm(user=user,prompt=prompt)
     
-    if "reserve" in selected_function.lower():
+    if "booking" in selected_function.lower():
         final_answer, memory, system_message, http_code = await _book(user, question)
     if "cancel" in selected_function.lower():
-        final_answer, memory, system_message, http_code = await _cancel(user, question)
+        final_answer, memory, system_message, http_code = await _cancel(user)
     elif "question" in selected_function.lower():
         final_answer, memory, system_message, http_code = await _rag(user, question)
     else:
@@ -157,7 +158,7 @@ async def _book(user: User, question: str):
     start_date: The arrival date of the customer,
     end_date: The leaving date of the customer,
     guest_count: The customer count,
-    room_type: What type of room they will stay,
+    room_type: What type of room they will stay and can be either single double or suite,
     rumber_of_rooms: How many rooms they want,
     payment_method: How they will pay,
     include_breakfast: Do they want to include breakfast as well or not,
@@ -255,7 +256,7 @@ async def _book(user: User, question: str):
     user.set_booking(booking=booking)
     
     if none_fields:
-        return f"You need to tell me these information as well please: {', '.join(none_fields)}", None, None, 200
+        return f"You need to tell me these information as well please: {', '.join(none_fields)} (room types: single (1-2 people), double (3-4 people), suite (4-5 people))", None, None, 200
     
     is_valid, message = booking.is_valid()
     
@@ -263,11 +264,11 @@ async def _book(user: User, question: str):
         return message, None, None, 400
     
     details = user.booking.get_booking_details()
-    reservation_id, reservation_response = user.get_hotel_management().reserve_room(full_name=details["full_name"], phone_number=details["phone_number"], email=details["email"], room_type=details["room_type"],
+    room_id, reservation_response = user.get_hotel_management().reserve_room(full_name=details["full_name"], phone_number=details["phone_number"], email=details["email"], room_type=details["room_type"],
                                              start_date=details["start_date"],end_date=details["end_date"],guest_count=details["guest_count"],number_of_rooms=details["number_of_rooms"],
                                              payment_method=details["payment_method"],include_breakfast=details["include_breakfast"],note=details["note"])
-    user.set_reservation_id(reservation_id=reservation_id)
-    return f"Booking request send: {reservation_response}", memory, system_message, 200
+    user.set_room_id(room_id=room_id)
+    return f"Great 😊 {reservation_response}\n Details: {details}", memory, system_message, 200
 
 async def _get_saved_user(user: User) -> User:
     if user.username in USER_STORE:
