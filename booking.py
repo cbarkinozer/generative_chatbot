@@ -16,6 +16,7 @@ class Booking:
         self.note = note if note else {}
 
     def show_booking_details(self):
+        """Returns each field in a formatted string."""
         details = (
             f"Name: {self.full_name}\n"
             f"Phone Number: {self.phone_number}\n"
@@ -32,6 +33,7 @@ class Booking:
         return details
     
     def get_booking_details(self) -> dict:
+        """Returns each field in a dictionary."""
         details = {
             "full_name": self.full_name,
             "phone_number": self.phone_number,
@@ -48,8 +50,8 @@ class Booking:
         return details
 
 
-    def is_valid(self):
-        
+    def is_valid(self) -> tuple[bool, str]:
+        """Checks the validation of the value of the each field."""
         # Date checks
         try:
             start_date = datetime.strptime(self.start_date, "%Y-%m-%d")
@@ -82,5 +84,4 @@ class Booking:
         # Include breakfast check (should be a boolean)
         if not isinstance(self.include_breakfast, bool):
             return False, "Include breakfast must be a boolean."
-
         return True, "Booking is valid."

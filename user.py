@@ -1,9 +1,10 @@
 from memory import Memory
 from booking import Booking
-from room import HotelManager
+from hotel_manager import HotelManager
 
 class User:
     def __init__(self, username):
+        # Each user has a username, llm preference, embedding model preference, memory, hotel management, booking details and room id that it's booked.
         self.username = username
         self.llm = "llama3" #gemini-pro
         self.embedder = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"

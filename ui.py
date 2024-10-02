@@ -13,12 +13,14 @@ class PDFChatBot:
         self.username = ""
     
     def initialize_session(self, username):
+        """Each tab is a new session and unique string is created that is used as username."""
         if username is None:
             username = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(6))
         self.username = username
         return username
 
     def render_file(self, files, password):
+        """File or files are sent with the correct format."""
         files_dict = {}
 
         # Check if files is a list or a single file
@@ -53,7 +55,6 @@ class PDFChatBot:
         return chat_history
 
     def generate_response(self, chat_history, text, session_id):
-        
         print("[DEBUG] Username:", session_id)
         response = requests.post(f"{API_URL}/question-answerer", data={"username": session_id, "question": text})
 
@@ -87,7 +88,7 @@ def create_demo():
         with gr.Row():
             chat_history = gr.Chatbot(
                 label='Hotel Chatbot',
-                value=[["**enters**", "Hi! 😊 You are welcome to ask me any questions about the hotel or to book.\n If you want to book, I will require at least the following information:\n Full name, phone number, email address, booking start and finish dates, guest count, room type, number of rooms, payment method, breakfast."]],
+                value=[["**enters**", "Hi! 😊 You are welcome to ask me any questions about the hotel or to book.\n If you want to book, I will require at least the following information:\n Full name, phone number, email address, booking start and finish dates, guest count, room type (room types: single (1-2 people), double (3-4 people), suite (4-5 people), number of rooms, payment method, breakfast."]],
                 elem_id='chatbot',
                 height=680
             )
@@ -103,8 +104,6 @@ def create_demo():
             with gr.Column(scale=1):
                 submit_button = gr.Button('Send')
     
-
-
         return demo, chat_history, text_input, submit_button, session_id
 
 def create_admin_interface():

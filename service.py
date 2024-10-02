@@ -256,7 +256,7 @@ async def _book(user: User, question: str):
     user.set_booking(booking=booking)
     
     if none_fields:
-        return f"You need to tell me these information as well please: {', '.join(none_fields)} (room types: single (1-2 people), double (3-4 people), suite (4-5 people))", None, None, 200
+        return f"You need to tell me these information as well please: {', '.join(none_fields)}", None, None, 200
     
     is_valid, message = booking.is_valid()
     
