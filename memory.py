@@ -15,14 +15,13 @@ class Memory:
     
     def get_last_answer(self) -> str:
         """Calls the last speaking turn."""
-        # Return the last answer given by the bot from the chat history.
         if self.memory_deque:
             last_entry = self.memory_deque[-1]
             # Extract the last answer from the stored format
-            start = last_entry.find('<previous_answer>') + len('<previous_answer>')
-            end = last_entry.find('</previous_answer>')
-            return last_entry[start:end]
+            start = last_entry.find('<Previous Answer>: ') + len('<Previous Answer>: ')
+            return last_entry[start:]
         return ""
+
     
     def get_memory(self) -> str:
         """Remembers the all previous turns."""
