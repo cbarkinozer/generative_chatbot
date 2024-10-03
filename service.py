@@ -19,7 +19,7 @@ from booking import Booking
 
 USER_STORE = {}
 
-FLUENCY_PROMPT = "As a realtime chatbot you are texting with the user. Your objective is to answer the user's inquiry with the specified answer in a friendly, concise, clear tone. Do not greet the user."
+FLUENCY_PROMPT = "As a realtime chatbot you are texting with the user. Your objective is to answer the user's inquiry with the specified answer in a friendly, concise, clear tone. Do not greet the user or feel sorry."
 
 
 async def upload_documents(user: User, files: list[UploadFile], password:str) -> tuple[str, int]:
