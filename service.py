@@ -19,6 +19,8 @@ from booking import Booking
 
 USER_STORE = {}
 
+FLUENCY_PROMPT = "As a realtime chatbot you are texting with the user. Your objective is to answer the user's inquiry with the specified answer in a friendly, concise, clear tone. Do not greet the user."
+
 
 async def upload_documents(user: User, files: list[UploadFile], password:str) -> tuple[str, int]:
     ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
@@ -72,7 +74,6 @@ async def _create_embeddings_and_save(user: User, chunks: any) -> FAISS:
 
 
 async def ask_question(user: User, question: str) -> tuple[str, int]: 
-    
     user = await _get_saved_user(user)
     system_message = """
         Your task is to classify customer inquiries related to booking or reservation.
@@ -125,7 +126,7 @@ async def ask_question(user: User, question: str) -> tuple[str, int]:
     if "booking" in selected_function.lower():
         final_answer, memory, system_message, http_code = await _book(user, question)
     if "cancel" in selected_function.lower():
-        final_answer, memory, system_message, http_code = await _cancel(user)
+        final_answer, memory, system_message, http_code = await _cancel(user, question)
     elif "question" in selected_function.lower():
         final_answer, memory, system_message, http_code = await _rag(user, question)
     else:
@@ -138,10 +139,17 @@ async def ask_question(user: User, question: str) -> tuple[str, int]:
 
     return final_answer, http_code
 
-async def _cancel(user:User):
+async def _cancel(user:User, question:str) -> tuple[str,str,str,int]:
     room_id = user.get_room_id()
     user.get_hotel_management().cancel_reservation(room_id)
-    return f"Your reservation is cancelled for the room with the room id {room_id}", None, None, 200
+    memory = user.memory.get_last_answer()
+    if room_id:
+        answer = f"Your reservation is cancelled for the room with the room id: {room_id}"
+    else:
+        answer = "I can't see a reservation on your account"
+    prompt = f"""{FLUENCY_PROMPT} <chat_memory>: {memory} <question>:{question} <answer>: {answer}"""
+    final_answer = await _ask_llm(user=user,prompt=prompt,llm="llama3-small")
+    return final_answer, memory, prompt, 200
 
 
 async def _book(user: User, question: str):
@@ -210,7 +218,10 @@ async def _book(user: User, question: str):
         # Booking request with no info is given
         print(f"An exception has occured: {e}\n")
         print(json_string)
-        return "For me to book you, please tell me your full name, phone number, email, booking start date, booking end date, guest count, room type, number of rooms, payment method. Also do you want breakfast too?", memory, 200
+        memory = user.memory.get_last_answer()
+        prompt = f"""{FLUENCY_PROMPT} <chat_memory>: {memory} <question>:{question} <answer>:For me to book you, please tell me your full name, phone number, email, booking start date, booking end date, guest count, room type (single (1-2 people), double (3-4 people), suite (4-5 people), number of rooms, payment method. Also do you want breakfasts?"""
+        final_answer = await _ask_llm(user=user,prompt=prompt,llm="llama3-small")
+        return final_answer, memory, prompt, 200
 
     print(data)
     
@@ -256,19 +267,30 @@ async def _book(user: User, question: str):
     user.set_booking(booking=booking)
     
     if none_fields:
-        return f"You need to tell me these information as well please: {', '.join(none_fields)}", None, None, 200
+        memory = user.memory.get_last_answer()
+        prompt = f"""{FLUENCY_PROMPT} <chat_memory>: {memory} <question>:{question} <answer>: You need to tell me these information as well please: {', '.join(none_fields)}"""
+        final_answer = await _ask_llm(user=user,prompt=prompt,llm="llama3-small")
+        return final_answer, memory, prompt, 200
     
     is_valid, message = booking.is_valid()
     
     if not is_valid:
-        return message, None, None, 400
+        memory = user.memory.get_last_answer()
+        prompt = f"""{FLUENCY_PROMPT} <chat_memory>: {memory} <question>:{question} <answer>: {message}"""
+        final_answer = await _ask_llm(user=user,prompt=prompt,llm="llama3-small")
+        return final_answer, memory, prompt, 400
     
     details = user.booking.get_booking_details()
     room_id, reservation_response = user.get_hotel_management().reserve_room(full_name=details["full_name"], phone_number=details["phone_number"], email=details["email"], room_type=details["room_type"],
                                              start_date=details["start_date"],end_date=details["end_date"],guest_count=details["guest_count"],number_of_rooms=details["number_of_rooms"],
                                              payment_method=details["payment_method"],include_breakfast=details["include_breakfast"],note=details["note"])
     user.set_room_id(room_id=room_id)
-    return f"Great 😊 {reservation_response}\n Details: {details}", memory, system_message, 200
+    memory = user.memory.get_last_answer()
+    prompt = f"""{FLUENCY_PROMPT} <chat_memory>: {memory} <question>:{question} <answer>: Great 😊 {reservation_response}\n Details: {details}"""
+    final_answer = await _ask_llm(user=user,prompt=prompt,llm="llama3-small")
+    final_answer += f"\n [DEBUG]: Booking is saved successfully: {details}"
+    return final_answer, memory, system_message, 200
+
 
 async def _get_saved_user(user: User) -> User:
     if user.username in USER_STORE:
@@ -303,6 +325,7 @@ async def _rag(user: User, question: str):
     Your response should be at least a few sentences long.
     NEVER use information outside of what is provided to you.
     Answer ONLY in the language in which you were asked the question.
+    Your answer will be directly send to the user so do not say something like "here is my response:"
 
     <Example 1>:
     <Human>:
@@ -341,11 +364,14 @@ async def _rag(user: User, question: str):
     print("[DEBUG] Memory: ",memory)
 
     answer = await _ask_llm(user=user, prompt=prompt)
-
     return answer, memory, system_message, 200
 
-async def _ask_llm(user:User, prompt:str) ->str:
-    llm = await _get_llm(model_name=user.llm)
+async def _ask_llm(user:User, prompt:str, llm:str=None) ->str:
+    if llm:
+        model_name = llm
+    else:
+        model_name = user.llm
+    llm = await _get_llm(model_name=model_name)
     final_answer = llm.invoke(prompt)
     final_answer = final_answer.content
     return final_answer
@@ -356,22 +382,25 @@ async def _get_llm(model_name:str):
     print(f"[DEBUG] Is .env loaded: {is_loaded}")
     if model_name == "openai":
         OPENAI_KEY = os.getenv("OPENAI_KEY")
-        llm = OpenAI(api_key=OPENAI_KEY, model="gpt-3.5-turbo-instruct")
+        llm = OpenAI(api_key=OPENAI_KEY, model="gpt-3.5-turbo-instruct", temperature=0)
     elif model_name == "azure_openai":
         AZURE_AD_TOKEN = os.getenv("AZURE_AD_TOKEN")
         AZURE_AD_TOKEN_PROVIDER = os.getenv("AZURE_AD_TOKEN_PROVIDER")
         AZURE_DEPLOYMENT = os.getenv("AZURE_DEPLOYMENT")
         AZURE_ENDPOINT = os.getenv("AZURE_ENDPOINT")
-        llm = AzureOpenAI(azure_ad_token=AZURE_AD_TOKEN, azure_ad_token_provider=AZURE_AD_TOKEN_PROVIDER, azure_deployment=AZURE_DEPLOYMENT, azure_endpoint=AZURE_ENDPOINT, model="gpt-3.5-turbo-instruct")
+        llm = AzureOpenAI(azure_ad_token=AZURE_AD_TOKEN, azure_ad_token_provider=AZURE_AD_TOKEN_PROVIDER, azure_deployment=AZURE_DEPLOYMENT, azure_endpoint=AZURE_ENDPOINT, model="gpt-3.5-turbo-instruct", temperature=0)
     elif model_name == "llama3":
         GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-        llm = ChatGroq(api_key=GROQ_API_KEY, model_name="llama3-70b-8192")
+        llm = ChatGroq(api_key=GROQ_API_KEY, model_name="llama3-70b-8192", temperature=0)
     elif model_name == "llama3-small":
         GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-        llm = ChatGroq(api_key=GROQ_API_KEY, model_name="llama3-8b-8192")
+        llm = ChatGroq(api_key=GROQ_API_KEY, model_name="llama3-8b-8192", temperature=0)
+    elif model_name == "gemma2-2b":
+        GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+        llm = ChatGoogleGenerativeAI(google_api_key=GOOGLE_API_KEY,model="gemma-2-2b-it", temperature=0)
     else:
         GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-        llm = ChatGoogleGenerativeAI(google_api_key=GOOGLE_API_KEY,model="gemini-pro")
+        llm = ChatGoogleGenerativeAI(google_api_key=GOOGLE_API_KEY,model="gemini-pro", temperature=0)
     return llm
 
 

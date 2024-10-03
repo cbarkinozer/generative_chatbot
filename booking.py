@@ -79,7 +79,7 @@ class Booking:
 
         # Email format check
         if not re.match(r"[^@]+@[^@]+\.[^@]+", self.email):
-            return False, "Invalid email format. Are you sure you entered email correctly?"
+            return False, "The email format is invalid, can you check the format?"
 
         # Include breakfast check (should be a boolean)
         if not isinstance(self.include_breakfast, bool):
