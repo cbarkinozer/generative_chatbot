@@ -73,10 +73,9 @@ async def _create_embeddings_and_save(user: User, chunks: any) -> FAISS:
 
 
 async def ask_question(user: User, question: str) -> tuple[str, int]: 
-    if user.get_language_preference() is None:
-        user.set_language_preference(language_preference=detect(question))
-
     user = await _get_saved_user(user)
+    if user.get_language_preference() == None:
+        user.set_language_preference(language_preference=detect(question))
     system_message = f"""
         Your task is to classify customer inquiries related to booking or reservation.
         Based on the content of the inquiry, provide the appropriate response from the following options:
@@ -158,6 +157,8 @@ async def _status(user:User, question:str)-> tuple[str,str,str,int]:
         Your objective is to answer the user's inquiry with the specified answer in a friendly, concise, clear tone.
         Do not greet the user or feel sorry.
         Answer ONLY in the {language} language in which the question was posed.
+
+        Now it's your turn, answer the question in the {language} language with the given answer:
     """
     prompt = f"""{FLUENCY_PROMPT} <chat_memory>: {memory} <question>:{question} <answer>: {answer}"""
     final_answer = await _ask_llm(user=user,prompt=prompt,llm="llama3-small")
@@ -177,6 +178,7 @@ async def _cancel(user:User, question:str) -> tuple[str,str,str,int]:
         Your objective is to answer the user's inquiry with the specified answer in a friendly, concise, clear tone.
         Do not greet the user or feel sorry.
         Answer ONLY in the {language} language in which the question was posed.
+        ONLY answer the question do NOT answer <chat_memory>.
     """
     prompt = f"""{FLUENCY_PROMPT} <chat_memory>: {memory} <question>:{question} <answer>: {answer}"""
     final_answer = await _ask_llm(user=user,prompt=prompt,llm="llama3-small")
@@ -190,6 +192,7 @@ async def _book(user: User, question: str):
         Your objective is to answer the user's inquiry with the specified answer in a friendly, concise, clear tone.
         Do not greet the user or feel sorry.
         Answer ONLY in the {language} language in which the question was posed.
+        ONLY answer the question do NOT answer <chat_memory>.
     """
 
     system_message = """
@@ -398,7 +401,7 @@ async def _rag(user: User, question: str):
     We have a single indoor swimming pool.
     Do you have any other questions?
 
-    Now it's your turn:
+    Now it's your turn, answer ONLY in the {language} language:
     """
     date = f"Current date (Year-Month-Date Hour-Minute-Second): {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
     prompt = f" System Message: {system_message} <Question>: {question} <Information>: {answer} <Memory>: {memory}, <Date>: {date}"

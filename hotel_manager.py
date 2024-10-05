@@ -120,11 +120,7 @@ class HotelManager:
         for row in room_status:
             room_type = row[0]
             available_rooms = row[1]
-            occupied_rooms = row[2]
-            result_str += f"Room Type: {room_type}\n"
-            result_str += f"Available Rooms: {available_rooms}\n"
-            result_str += f"Occupied Rooms: {occupied_rooms}\n"
-            result_str += "----------------------------\n"
+            result_str += f"For Room Type: {room_type} there are {available_rooms} available rooms\n"
         
         return result_str
 
@@ -162,9 +158,9 @@ class HotelManager:
             cursor.execute('''UPDATE rooms SET is_available = 0 WHERE room_id = ?''', (room_id,))
 
             self.conn.commit()
-            return room_id, f"Room {room_id} reserved from {start_date} to {end_date}."
+            return room_id, f"Room {room_id} reserved from {start_date} to {end_date} successfully."
         else:
-            return None, "No available rooms for the selected type and dates."
+            return None, "No available rooms for the selected type and dates, I could not do your reservation."
 
     def cancel_reservation(self, room_id) -> str:
         cursor = self.conn.cursor()
