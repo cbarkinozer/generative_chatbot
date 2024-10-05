@@ -7,7 +7,10 @@ Single page dummy fasthtml website will created and gradio project will be integ
 For small model requests (the error message format, not main operations), it is possible to use Ollama and phi-3.5 to run on CPU but for ease free API request to Groq is preffered.
 Also it can increase latency and might not do function calling.
 
-for returned strings use gemma2-2b from google workspace, add unit tests.
+Logging will be moved from local .txt files to a database.
+Room occupancy information will be tracked based on user requirements.
+The issue of favoring English, even though other languages are supported, will be addressed to ensure compatibility with multiple foreign languages.
+The architecture design will be updated.
 
 # Simple booking dialogues 
 Simple booking dialogues that are used can be found in document.txt.  
@@ -24,6 +27,7 @@ Application is tested with a real user, the questions the user asked is added to
 * The example booking system has flaws
 
 # ENV Variables
+ADMIN_USERNAME=****
 ADMIN_PASSWORD=****   
 GOOGLE_API_KEY=****    
 GROQ_API_KEY=****    

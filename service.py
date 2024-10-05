@@ -16,11 +16,10 @@ import io
 from dotenv import load_dotenv
 import json
 from booking import Booking
+import sqlite3
+from langdetect import detect
 
 USER_STORE = {}
-
-FLUENCY_PROMPT = "As a realtime chatbot you are texting with the user. Your objective is to answer the user's inquiry with the specified answer in a friendly, concise, clear tone. Do not greet the user or feel sorry."
-
 
 async def upload_documents(user: User, files: list[UploadFile], password:str) -> tuple[str, int]:
     ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
@@ -74,11 +73,15 @@ async def _create_embeddings_and_save(user: User, chunks: any) -> FAISS:
 
 
 async def ask_question(user: User, question: str) -> tuple[str, int]: 
+    if user.get_language_preference() is None:
+        user.set_language_preference(language_preference=detect(question))
+
     user = await _get_saved_user(user)
-    system_message = """
+    system_message = f"""
         Your task is to classify customer inquiries related to booking or reservation.
         Based on the content of the inquiry, provide the appropriate response from the following options:
 
+        If the customer wants to learn free roms or status of the rooms, respond with "status".
         If the customer explicitly wants to book or reserve, respond with "booking".
         If the customer wants to cancel a booking or reservation, respond with "cancel".
         If the customer is still undecided and is asking questions or gathering information, respond with "question".
@@ -114,6 +117,12 @@ async def ask_question(user: User, question: str) -> tuple[str, int]:
 
         Example 5:
         <Human>:
+        Do you have a room for three people?
+        <AI>:
+        status
+
+        Example 6:
+        <Human>:
         I changed my mind. Please cancel my booking/reservation.
         <AI>:
         cancel
@@ -125,6 +134,8 @@ async def ask_question(user: User, question: str) -> tuple[str, int]:
     
     if "booking" in selected_function.lower():
         final_answer, memory, system_message, http_code = await _book(user, question)
+    if "status" in selected_function.lower():
+        final_answer, memory, system_message, http_code = await _status(user, question)
     if "cancel" in selected_function.lower():
         final_answer, memory, system_message, http_code = await _cancel(user, question)
     elif "question" in selected_function.lower():
@@ -136,8 +147,21 @@ async def ask_question(user: User, question: str) -> tuple[str, int]:
     
     user.memory.save(question=question, answer=final_answer)
     await _log(user=user, memory=memory, question=question, selected_function= selected_function, final_answer = final_answer)
-
     return final_answer, http_code
+
+async def _status(user:User, question:str)-> tuple[str,str,str,int]:
+    answer = user.get_hotel_management().get_room_status()
+    memory = user.memory.get_last_answer()
+    language = user.get_language_preference()
+    FLUENCY_PROMPT = f"""
+        As a realtime chatbot you are texting with the user.
+        Your objective is to answer the user's inquiry with the specified answer in a friendly, concise, clear tone.
+        Do not greet the user or feel sorry.
+        Answer ONLY in the {language} language in which the question was posed.
+    """
+    prompt = f"""{FLUENCY_PROMPT} <chat_memory>: {memory} <question>:{question} <answer>: {answer}"""
+    final_answer = await _ask_llm(user=user,prompt=prompt,llm="llama3-small")
+    return final_answer, memory, prompt, 200
 
 async def _cancel(user:User, question:str) -> tuple[str,str,str,int]:
     room_id = user.get_room_id()
@@ -147,12 +171,26 @@ async def _cancel(user:User, question:str) -> tuple[str,str,str,int]:
         answer = f"Your reservation is cancelled for the room with the room id: {room_id}"
     else:
         answer = "I can't see a reservation on your account"
+    language = user.get_language_preference()
+    FLUENCY_PROMPT = f"""
+        As a realtime chatbot you are texting with the user.
+        Your objective is to answer the user's inquiry with the specified answer in a friendly, concise, clear tone.
+        Do not greet the user or feel sorry.
+        Answer ONLY in the {language} language in which the question was posed.
+    """
     prompt = f"""{FLUENCY_PROMPT} <chat_memory>: {memory} <question>:{question} <answer>: {answer}"""
     final_answer = await _ask_llm(user=user,prompt=prompt,llm="llama3-small")
     return final_answer, memory, prompt, 200
 
 
 async def _book(user: User, question: str):
+    language = user.get_language_preference()
+    FLUENCY_PROMPT = f"""
+        As a realtime chatbot you are texting with the user.
+        Your objective is to answer the user's inquiry with the specified answer in a friendly, concise, clear tone.
+        Do not greet the user or feel sorry.
+        Answer ONLY in the {language} language in which the question was posed.
+    """
 
     system_message = """
     You are responsible for getting a reservation information and creating a json from it.
@@ -166,13 +204,14 @@ async def _book(user: User, question: str):
     start_date: The arrival date of the customer,
     end_date: The leaving date of the customer,
     guest_count: The customer count,
-    room_type: What type of room they will stay and can be either single double or suite,
+    room_type: What type of room they will stay,
     rumber_of_rooms: How many rooms they want,
     payment_method: How they will pay,
     include_breakfast: Do they want to include breakfast as well or not,
     note: (Optional) other informations
 
     Do NOT forget:
+    Room type only can be single (for 1-2 people) double (for 3-4 people) or suite (for 4-5 people).
     Dates must be in YYYY-MM-DD format.
     End date must be after start date.
     Guest count must be at least 1.
@@ -260,6 +299,7 @@ async def _book(user: User, question: str):
 
     for field_name, value in scrapped_data.items():
         if (value == "" or value is None) and (field_name != "note" and getattr(booking, field_name) is None):
+            field_name = field_name.replace("_", " ")
             none_fields.append(field_name)
         else:
             setattr(booking, field_name, value)
@@ -309,7 +349,8 @@ async def _rag(user: User, question: str):
     memory = user.memory.get_memory()
     docs = vector_store.similarity_search(question+memory)
     retrieved_chunks = docs[0].page_content + docs[1].page_content + docs[2].page_content
-    system_message="Figure out the answer of the question by the given information pieces. ALWAYS answer with the language of the question."
+    language = user.get_language_preference
+    system_message= f"Figure out the answer of the question by the given information pieces. ALWAYS answer in {language} language."
     prompt = system_message + "Question: " + question + " Context: " + retrieved_chunks
     try:
         response = llm.invoke(prompt)
@@ -318,13 +359,13 @@ async def _rag(user: User, question: str):
     answer = response.content
     print(f"[DEBUG] RAG Results: {answer}")
 
-    system_message = """
+    system_message = f"""
     You are a reservation assistant who books and reserves places.
     Your task is to answer the questions asked by the user using the information provided to you.
     The tone of your answers is friendly and neutral.
     Your response should be at least a few sentences long.
     NEVER use information outside of what is provided to you.
-    Answer ONLY in the language in which you were asked the question.
+    Answer ONLY in the {language} language in which the question was posed.
     Your answer will be directly send to the user so do not say something like "here is my response:"
 
     <Example 1>:
@@ -410,14 +451,38 @@ async def _get_vector_file()-> any:
     return vector_store
 
 
-async def _log(user: User, memory:str, question: str, selected_function: str, final_answer: str) -> None:
+# Create or connect to an SQLite database and ensure table exists
+async def _log(user: User, memory: str, question: str, selected_function: str, final_answer: str) -> None:
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     username = user.username
     llm = user.llm
     embedder = user.embedder
 
-    log_message = f"\n{timestamp}, Username: {username}, Memory: {memory}, Question: {question}, LLM: {llm}, Embedder: {embedder}, Selected Function: {selected_function}, Final Answer: {final_answer}\n"
-    with open("log.txt", "a", encoding="utf-8") as file:
-        file.write("------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------")
-        file.write(log_message)
-        file.write("------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------")
+    # Connect to the SQLite database (or create it if it doesn't exist)
+    conn = sqlite3.connect("log_data.db")
+    cursor = conn.cursor()
+
+    # Create the logs table if it doesn't exist
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT,
+            username TEXT,
+            memory TEXT,
+            question TEXT,
+            llm TEXT,
+            embedder TEXT,
+            selected_function TEXT,
+            final_answer TEXT
+        )
+    ''')
+
+    # Insert log data
+    cursor.execute('''
+        INSERT INTO logs (timestamp, username, memory, question, llm, embedder, selected_function, final_answer)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (timestamp, username, memory, question, llm, embedder, selected_function, final_answer))
+
+    # Commit the transaction and close the connection
+    conn.commit()
+    conn.close()

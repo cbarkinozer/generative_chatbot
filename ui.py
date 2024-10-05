@@ -178,7 +178,12 @@ with app1:
         outputs=[loading_message, upload_status]
     )
 
+def _authenticate(username, password):
+    if username == os.getenv("ADMIN_USERNAME") and password == os.getenv("ADMIN_PASSWORD"):
+        return True
+    return False
+
 if __name__ == "__main__":
     # Combine the chatbot interface with other tabs
     main_demo = gr.TabbedInterface([demo, app1], ["Chatbot", "Document Uploading"])
-    main_demo.launch()
+    main_demo.launch(auth=_authenticate)

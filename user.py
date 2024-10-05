@@ -12,12 +12,19 @@ class User:
         self.hotel_management = HotelManager()
         self.booking = None
         self.room_id = None
+        self.language_preference = None
     
+    def set_language_preference(self, language_preference:str):
+        self.language_preference = language_preference
+
     def set_booking(self, booking:Booking):
         self.booking = booking
     
     def set_room_id(self, room_id:int):
         self.room_id = room_id
+    
+    def get_language_preference(self):
+        return self.language_preference
     
     def get_room_id(self):
         return self.room_id

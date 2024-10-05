@@ -72,7 +72,6 @@ class HotelManager:
                             FOREIGN KEY (reservation_id) REFERENCES reservations(reservation_id),
                             FOREIGN KEY (room_id) REFERENCES rooms(room_id)
                         )''')
-
         self.conn.commit()
 
     def initialize_rooms(self, rooms_file):
@@ -99,6 +98,36 @@ class HotelManager:
             return True
         except ValueError:
             return False
+    
+    def get_room_status(self) -> str:
+        cursor = self.conn.cursor()
+
+        # Get available rooms by type
+        cursor.execute('''
+            SELECT room_type, 
+                COUNT(CASE WHEN is_available = 1 THEN 1 END) AS available_rooms,
+                COUNT(CASE WHEN is_available = 0 THEN 1 END) AS occupied_rooms
+            FROM rooms
+            GROUP BY room_type
+        ''')
+
+        room_status = cursor.fetchall()
+
+        # Prepare the output string
+        result_str = "Room Status Information:\n"
+        result_str += "----------------------------\n"
+        
+        for row in room_status:
+            room_type = row[0]
+            available_rooms = row[1]
+            occupied_rooms = row[2]
+            result_str += f"Room Type: {room_type}\n"
+            result_str += f"Available Rooms: {available_rooms}\n"
+            result_str += f"Occupied Rooms: {occupied_rooms}\n"
+            result_str += "----------------------------\n"
+        
+        return result_str
+
 
     def check_room_availability(self, room_type, start_date, end_date):
         cursor = self.conn.cursor()
