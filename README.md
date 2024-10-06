@@ -18,6 +18,11 @@ Application is tested with a real user, the questions the user asked is added to
 * If question answered is selected: In question answering questions are answered from given document.
 * If booking is selected: question is asked and json filled and checked if all values are set if not asked back. If all values are set one last approve is asked and later save on sql built-in database.
 
+# To Be Able to Try the Project from Local
+Run: "docker-compose -f milvus-docker-compose.yaml up --build" on terminal.  
+
+# To Containerize the Project
+Run: "docker-compose -f app-docker-compose.yaml up --build"  
 
 # ENV Variables
 ADMIN_USERNAME=****

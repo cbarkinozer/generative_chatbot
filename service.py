@@ -22,6 +22,7 @@ from langdetect import detect
 USER_STORE = {}
 
 async def upload_documents(user: User, files: list[UploadFile], password:str) -> tuple[str, int]:
+    """Checking the password, extracting texts, chunking and creating embeddings from them."""
     ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
     if password != ADMIN_PASSWORD:
         return "Only ADMIN can insert files.", 400
@@ -32,6 +33,7 @@ async def upload_documents(user: User, files: list[UploadFile], password:str) ->
 
 
 async def _extract_text_from_document(files: list[UploadFile]) -> str:
+    """Extracting text from documents."""
     text = ""
     for file in files:
         byte_object = await file.read()
@@ -52,6 +54,7 @@ async def _extract_text_from_document(files: list[UploadFile]) -> str:
 
 
 async def _chunk_text(text: str) -> list[str]:
+    """Splitting text to chunks to get better semantic matches."""
     chunks = None
     text_splitter = CharacterTextSplitter(
         separator="\n",
@@ -64,6 +67,7 @@ async def _chunk_text(text: str) -> list[str]:
 
 
 async def _create_embeddings_and_save(user: User, chunks: any) -> FAISS:
+    """An embedding model is running on CPU to create embeddings and save to local"""
     embeddings = HuggingFaceEmbeddings(model_name=user.embedder)
     pkl_name = os.path.join("document.pkl")
     vector_store = FAISS.from_texts(chunks, embeddings, metadatas=[{"source": f"{pkl_name}:{i}"} for i in range(len(chunks))])
@@ -73,6 +77,7 @@ async def _create_embeddings_and_save(user: User, chunks: any) -> FAISS:
 
 
 async def ask_question(user: User, question: str) -> tuple[str, int]: 
+    """Customer's inquiry is answered. First user object is retrieved from unique username. Language preference is set if None. Inquirys type is decided using an LLM call."""
     user = await _get_saved_user(user)
     if user.get_language_preference() == None:
         user.set_language_preference(language_preference=detect(question))
@@ -149,6 +154,7 @@ async def ask_question(user: User, question: str) -> tuple[str, int]:
     return final_answer, http_code
 
 async def _status(user:User, question:str)-> tuple[str,str,str,int]:
+    """Retrieve room availability status and return to the user."""
     answer = user.get_hotel_management().get_room_status()
     memory = user.memory.get_last_answer()
     language = user.get_language_preference()
@@ -165,6 +171,7 @@ async def _status(user:User, question:str)-> tuple[str,str,str,int]:
     return final_answer, memory, prompt, 200
 
 async def _cancel(user:User, question:str) -> tuple[str,str,str,int]:
+    """Cancel reservation if the user have one."""
     room_id = user.get_room_id()
     user.get_hotel_management().cancel_reservation(room_id)
     memory = user.memory.get_last_answer()
@@ -186,6 +193,7 @@ async def _cancel(user:User, question:str) -> tuple[str,str,str,int]:
 
 
 async def _book(user: User, question: str):
+    """Get required information in JSON and later book the user."""
     language = user.get_language_preference()
     FLUENCY_PROMPT = f"""
         As a realtime chatbot you are texting with the user.
@@ -336,6 +344,7 @@ async def _book(user: User, question: str):
 
 
 async def _get_saved_user(user: User) -> User:
+    """User is retrieved from user store according to the unique username."""
     if user.username in USER_STORE:
         return USER_STORE[user.username]
     else:
@@ -344,6 +353,7 @@ async def _get_saved_user(user: User) -> User:
 
 
 async def _rag(user: User, question: str):
+    """Similar answer is retrieved from the FAQ document."""
     vector_store = await _get_vector_file()
     if vector_store is None:
         return "Document not found.", None, None, 400
@@ -411,6 +421,7 @@ async def _rag(user: User, question: str):
     return answer, memory, system_message, 200
 
 async def _ask_llm(user:User, prompt:str, llm:str=None) ->str:
+    """LLM call."""
     if llm:
         model_name = llm
     else:
@@ -422,6 +433,7 @@ async def _ask_llm(user:User, prompt:str, llm:str=None) ->str:
 
 
 async def _get_llm(model_name:str):
+    """LLM adapter using langchain wrappers."""
     is_loaded = load_dotenv('.env')
     print(f"[DEBUG] Is .env loaded: {is_loaded}")
     if model_name == "openai":
@@ -454,8 +466,8 @@ async def _get_vector_file()-> any:
     return vector_store
 
 
-# Create or connect to an SQLite database and ensure table exists
 async def _log(user: User, memory: str, question: str, selected_function: str, final_answer: str) -> None:
+    """Create or connect to an SQLite database and ensure table exists."""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     username = user.username
     llm = user.llm
