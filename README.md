@@ -9,6 +9,11 @@ Single page dummy fasthtml website will created and gradio project will be integ
 For small model requests (the error message format, not main operations), it is possible to use Ollama and phi-3.5 to run on CPU but for ease free API request to Groq is preffered.
 Also it can increase latency and might not do function calling.
 
+# Demo
+![alt text](image-6.png)
+![alt text](image-4.png)
+![alt text](image-5.png)
+
 # Simple booking dialogues 
 Simple booking dialogues that are used can be found in document.txt.  
 LLMs are utilized to generate example question answer pairs to do Retrieval Augmented Generation.  
@@ -33,6 +38,23 @@ ADMIN_PASSWORD=****
 GOOGLE_API_KEY=****    
 GROQ_API_KEY=****    
 API_URL=http://127.0.0.1:5000    
+
+# Frameworks utilized
+* FAISS-CPU: A library from Facebook AI for generating vector representations of queries and documents on the CPU.  
+* FastAPI: A high-performance framework for building asynchronous REST backend APIs.  
+* Gradio: A library for creating user-friendly interfaces.  
+* LangChain: Provides utilities for splitting long texts, using LLM APIs, and embedding models.  
+* PyPDF2: Extracts text from PDF files.  
+* python-docx: Extracts text from DOCX files.  
+* python-dotenv: Loads secrets from environment (.env) files easily.  
+
+# Setup Steps
+1. Running the Vector Database: We are running the docker-compose.yaml to created required MilvusDB [8] vector database pods.
+![alt text](image-1.png)
+2. Uploading FAQ Document: After starting the FastAPI backend and Gradio UIs, you can visit the Gradio UI URL. On the "Document Uploading" tab, you can enter the admin password and upload a document (e.g., a .txt file) to serve as the LLM's knowledge base.
+![alt text](image-2.png)
+3. Booking and Asking Questions: The assistant manages both questions and booking requests. For questions, it responds using its knowledge base. For bookings, it guides users to provide the required information in the correct format. Users can also cancel bookings later. The project includes a demo booking system, which can be swapped out for the hotel's booking API.
+![alt text](image-3.png)
 
 # Strengths
 * Handles natural, everyday conversations for answering questions and making bookings, without relying on predefined formats.
